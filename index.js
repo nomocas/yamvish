@@ -477,18 +477,17 @@
 		},
 		on: function(name, handler) {
 			return this.done(function(context) {
-				var self = this;
+				var self = this,
+					h;
 				if (typeof handler === 'string') {
 					if (!context.handlers)
 						throw produceError('on(%s) : no "%s" handlers define in current context', name, handler);
-					var h = context.handlers[handler];
-					this.addEventListener(name, function(evt) {
-						h.call(self, context, evt);
-					});
+					h = context.handlers[handler];
 				} else
-					this.addEventListener(name, function(evt) {
-						handler.call(self, context, evt);
-					});
+					h = handler;
+				this.addEventListener(name, function(evt) {
+					h.call(self, context, evt);
+				});
 			});
 		},
 		click: function(handler) {
