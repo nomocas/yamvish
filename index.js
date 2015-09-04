@@ -345,19 +345,13 @@
 		}
 	};
 
-	var y = function(q) {
-		return new y.Query(q);
-	};
-
-	y.isServer = (typeof process !== 'undefined') && process.versions && process.versions.node;
-	y.Context = Context;
 	//_______________________________________________________ QUERY
 
-	y.Query = function(q) {
+	function Query(q) {
 		this._queue = q ? q._queue.slice() : [];
 	};
 
-	y.Query.prototype = {
+	Query.prototype = {
 		call: function(caller, context) {
 			return execQueue(caller, this._queue, context ||  caller.context);
 		},
@@ -382,20 +376,17 @@
 			return this.done(function(context) {
 				var ok = condition,
 					self = this;
-
 				var exec = function(type, path, ok) {
 					if (ok)
 						return trueCallback.call(self, context);
 					else if (falseCallback)
 						return falseCallback.call(self, context);
 				};
-
 				if (condition && condition.__interpolable__) {
 					ok = condition.output(context.data);
 					(this.binds = this.binds || []).push(condition.subscribeTo(context, exec));
 				} else if (type === 'function')
 					ok = condition.call(this, context);
-
 				return exec('set', ok);
 			});
 			return this;
@@ -516,7 +507,7 @@
 				} else
 					val = value;
 				if (this.__yVirtual__) {
-					node = new y.Virtual('textnode');
+					node = new Virtual('textnode');
 					node.textContent = val;
 				} else
 					node = document.createTextNode(val);
@@ -534,7 +525,7 @@
 			return this.done(function(context) {
 				var node;
 				if (this.__yVirtual__)
-					node = new y.Virtual(name);
+					node = new Virtual(name);
 				else
 					node = document.createElement(name);
 				var temp;
@@ -556,7 +547,7 @@
 
 				if (!template)
 					if (!y.isServer)
-						template = this._eachTemplate = y.elementChildrenToQuery(this);
+						template = this._eachTemplate = elementChildrenToQuery(this);
 					else
 						throw produceError('no template for .each query handler', this);
 
@@ -595,18 +586,18 @@
 				context.push(path, value);
 			});
 		},
+		del: function(path) {
+			return this.done(function(context) {
+				context.del(path);
+			});
+		},
+		//__________ STILL TO DO
 		freeze: function() {
 			return this.done(function() {
 
 			});
 		},
 		unfreeze: function() {
-		//__________ STILL TO DO
-			return this.done(function() {
-
-			});
-		},
-		router: function() {
 			return this.done(function() {
 
 			});
@@ -616,27 +607,16 @@
 
 			});
 		},
-		load: function(path, uri, query) {
+		css: function(prop, value) {
 			return this.done(function() {
 
 			});
 		},
-		css: function() {
+		visible: function(flag) {
 			return this.done(function() {
 
 			});
 		}
-	};
-
-	y.call = function(node) { // args : node, q1, q2, ...
-		var promises = [];
-		for (var i = 1, len = arguments.length; i < len; ++i) {
-			var p = arguments[i].call(node);
-			if (p && p.then)
-				promises.push(p);
-		}
-		if (promises.length)
-			return Promise.all(promises);
 	};
 	//_______________________________________________________ CLASS LIST
 
@@ -660,7 +640,7 @@
 	 * Virtual Node
 	 * @param {String} tagName the tagName of the virtual node
 	 */
-	y.Virtual = function(tagName, context) {
+	function Virtual(tagName, context) {
 		// mock
 		this.tagName = tagName;
 		this.classList = new ClassList();
@@ -668,7 +648,7 @@
 		this.context = context;
 	};
 
-	y.Virtual.prototype  = {
+	Virtual.prototype  = {
 		// _____________________________ MOCK STANDARD NODE
 		setAttribute: function(name, value) {
 			(this.attributes = this.attributes || {})[name] = value;
@@ -744,54 +724,6 @@
 		}
 	};
 
-	/**
-	 * DOM element.childNodes parsing to y.Query
-	 * @param  {[type]} element [description]
-	 * @param  {[type]} query   [description]
-	 * @return {[type]}         [description]
-	 */
-	y.elementChildrenToQuery = function elementChildrenToQuery(element, query) {
-		var t = query || y();
-		for (var i = 0, len = element.childNodes.length; i < len; ++i)
-			elementToQuery(element.childNodes[i], t);
-		return t;
-	};
-	/**
-	 * DOM element parsing to y.Query
-	 * @param  {[type]} element [description]
-	 * @param  {[type]} query   [description]
-	 * @return {[type]}         [description]
-	 */
-	y.elementToQuery = function elementToQuery(element, query) {
-		var t = query || y();
-		switch (element.nodeType) {
-			case 1:
-				// if (element.tagName.toLowerCase() === 'script')
-				// console.log('CATCH script');
-				var childQuery = y();
-				elementChildrenToQuery(element, childQuery);
-				if (element.id)
-					childQuery.id(element.id)
-				if (element.attributes.length)
-					for (var j = 0, len = element.attributes.length; j < len; ++j) {
-						var o = element.attributes[j];
-						childQuery.attr(o.name, o.value);
-					}
-				for (var l = 0; l < element.classList; ++l)
-					childQuery.setClass(element.classList[l]);
-				t.tag.apply(t, [element.tagName.toLowerCase(), childQuery]);
-				break;
-			case 3:
-				t.text(element.textContent);
-				break;
-			case 4:
-				console.log('element is CDATA : ', element);
-				break;
-			default:
-				console.warn('k : error : DOM node not managed : type : %s, ', element.nodeType, element);
-		}
-		return t;
-	};
 	//_______________________________________________________ INTERPOLABLE
 
 	var Interpolable = function(splitted) {
@@ -845,10 +777,73 @@
 			return string; // string is not interpolable
 		return new Interpolable(splitted);
 	};
-	y.interpolable = interpolable;
 
 	//_______________________________________________________ DOM PARSING
+
+	/**
+	 * DOM element.childNodes parsing to y.Query
+	 * @param  {[type]} element [description]
+	 * @param  {[type]} query   [description]
+	 * @return {[type]}         [description]
+	 */
+	function elementChildrenToQuery(element, query) {
+		var t = query || y();
+		for (var i = 0, len = element.childNodes.length; i < len; ++i)
+			elementToQuery(element.childNodes[i], t);
+		return t;
+	};
+	/**
+	 * DOM element parsing to y.Query
+	 * @param  {[type]} element [description]
+	 * @param  {[type]} query   [description]
+	 * @return {[type]}         [description]
+	 */
+	function elementToQuery(element, query) {
+		var t = query || y();
+		switch (element.nodeType) {
+			case 1:
+				// if (element.tagName.toLowerCase() === 'script')
+				// console.log('CATCH script');
+				var childQuery = y();
+				elementChildrenToQuery(element, childQuery);
+				if (element.id)
+					childQuery.id(element.id)
+				if (element.attributes.length)
+					for (var j = 0, len = element.attributes.length; j < len; ++j) {
+						var o = element.attributes[j];
+						childQuery.attr(o.name, o.value);
+					}
+				for (var l = 0; l < element.classList; ++l)
+					childQuery.setClass(element.classList[l]);
+				t.tag.apply(t, [element.tagName.toLowerCase(), childQuery]);
+				break;
+			case 3:
+				t.text(element.textContent);
+				break;
+			case 4:
+				console.log('element is CDATA : ', element);
+				break;
+			default:
+				console.warn('k : error : DOM node not managed : type : %s, ', element.nodeType, element);
+		}
+		return t;
+	};
+
 	//____________________________________________________ END PARSING
+
+
+	var y = function(q) {
+		return new Query(q);
+	};
+
+	y.isServer = (typeof process !== 'undefined') && process.versions && process.versions.node;
+	y.Context = Context;
+	y.Query = Query;
+
+	y.elementChildrenToQuery = elementChildrenToQuery;
+	y.elementToQuery = elementToQuery;
+	y.interpolable = interpolable;
+	y.Virtual = Virtual;
 	y.Interpolable = Interpolable;
 
 	if (typeof module !== 'undefined')
@@ -874,7 +869,7 @@
 	}
 
 		cloneNode: function(deep) {
-			var node = new y.Virtual(this.tagName);
+			var node = new Virtual(this.tagName);
 			node.id = this.id;
 			if (this.attributes)
 				node.attributes = copy(this.attributes);
