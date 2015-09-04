@@ -31,13 +31,13 @@ try {
 		)
 		.div(
 			y().setClass('haaaaaaaaaa', 'active')
-			.tag('ul',
+			.ul(
 				y().setClass('bloupiiiiiiii')
-				.each('items', y().tag('li', y().text('{{ $this }}')))
+				.each('items', y().li(y().text('{{ $this }}')))
 			)
-			.tag('ul',
+			.ul(
 				y().setClass('zzzzzzzzzzz')
-				.each('amis', y().tag('li',
+				.each('amis', y().li(
 					y()
 					.attr('fromParent', '{{ $parent.test }}')
 					.text('soooooooo {{ title }}')
@@ -46,7 +46,7 @@ try {
 			.div(
 				y().text('{{ deep }} div')
 			)
-			.tag('span', y().text('deep inner span'))
+			.span(y().text('deep inner span'))
 		)
 		.tag('span', y().text('rooo'));
 
@@ -80,7 +80,7 @@ try {
 			title: 'philippe'
 		})
 		.del('items.2')
-		.del('amis.1')
+		.del('amis.1');
 
 	console.timeEnd("t");
 
