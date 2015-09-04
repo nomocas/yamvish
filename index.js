@@ -34,6 +34,8 @@
 */
 (function() {
 
+	//__________________________________________________________ UTILS
+
 	function produceError(msg, report) {
 		var e = new Error(msg);
 		e.report = report;
@@ -163,6 +165,7 @@
 			node.parentNode = null;
 		}
 	}
+	//_______________________________________________________ DATA BIND CONTEXT
 
 	function Context(data, parent, subscribeTo) {
 		this.data = data || {};
@@ -312,6 +315,7 @@
 
 	y.isServer = (typeof process !== 'undefined') && process.versions && process.versions.node;
 	y.Context = Context;
+	//_______________________________________________________ QUERY
 
 	y.Query = function(q) {
 		this._queue = q ? q._queue.slice() : [];
@@ -549,6 +553,7 @@
 			});
 		},
 		unfreeze: function() {
+		//__________ STILL TO DO
 			return this.done(function() {
 
 			});
@@ -585,6 +590,7 @@
 		if (promises.length)
 			return Promise.all(promises);
 	};
+	//_______________________________________________________ CLASS LIST
 
 	/**
 	 * ClassList mockup for Virtual
@@ -600,6 +606,7 @@
 			delete this.classes[name];
 		}
 	};
+	//_______________________________________________________ VIRTUAL
 
 	/**
 	 * Virtual Node
@@ -737,6 +744,7 @@
 		}
 		return t;
 	};
+	//_______________________________________________________ INTERPOLABLE
 
 	var Interpolable = function(splitted) {
 		this.__interpolable__ = true;
@@ -791,6 +799,8 @@
 	};
 	y.interpolable = interpolable;
 
+	//_______________________________________________________ DOM PARSING
+	//____________________________________________________ END PARSING
 	y.Interpolable = Interpolable;
 
 	if (typeof module !== 'undefined')
