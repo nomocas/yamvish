@@ -540,6 +540,21 @@
 			args.unshift('div');
 			return this.tag.apply(this, args);
 		},
+		span: function() {
+			var args = Array.prototype.slice.call(arguments);
+			args.unshift('span');
+			return this.tag.apply(this, args);
+		},
+		ul: function() {
+			var args = Array.prototype.slice.call(arguments);
+			args.unshift('ul');
+			return this.tag.apply(this, args);
+		},
+		li: function() {
+			var args = Array.prototype.slice.call(arguments);
+			args.unshift('li');
+			return this.tag.apply(this, args);
+		},
 		each: function(path, templ) { // arguments : path, q1, q2, ...
 
 			return this.done(function(context) {
