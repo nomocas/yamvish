@@ -1,3 +1,18 @@
+/*
+	Times : 
+
+			nodejs : 23ms/1K (165ms/10K)  new node + new query + exec query + toString
+			browser : 75ms/1K (790ms/10K)   new node + new query + exec query + toString
+ 
+ 			nodejs :  37 ms / 10K  					toString
+			browser : 174 ms / 10K (18ms/1000) 		toString
+
+
+			browser 	65 ms / 1K 					body.appendChild(render())
+			browser 	60 ms / 1K 					body.innerHTML = toString())
+
+ */
+
 var y = require("./index");
 //______________________________________________ TESTS
 try {

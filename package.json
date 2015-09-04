@@ -1,6 +1,6 @@
 {
   "name": "yamvish",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Yet Another MVish-not-a-framework javascript library",
   "main": "index.js",
   "directories": {
@@ -11,20 +11,22 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/nomocas/decompose.git"
+    "url": "https://github.com/nomocas/yamvish.git"
   },
   "keywords": [
-    "functions",
-    "composition",
+    "mvvm",
+    "mvc",
     "js",
-    "AOP"
+    "data-bind",
+    "templating",
+    "observable"
   ],
   "author": "Gilles Coomans <gilles.coomans@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/nomocas/decompose/issues"
+    "url": "https://github.com/nomocas/yamvish/issues"
   },
-  "homepage": "https://github.com/nomocas/decompose",
+  "homepage": "https://github.com/nomocas/yamvish",
   "devDependencies": {
     "gulp": "^3.9.0",
     "chai": "^2.2.0",
