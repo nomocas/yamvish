@@ -267,7 +267,15 @@
 		unsubscribe: function(path, fn, upstream) {
 			if (!path.forEach)
 				path = path.split('.');
-			var space = getProp(this.map, path);
+			var space;
+			if (path[0] === '$this')
+				space = this.map;
+			else if (path[0] === '$parent') {
+				if (this.parent)
+					return this.parent.unsubscribe(path.slice(1), fn, upstream);
+				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
+			} else
+				space = getProp(this.map, path);
 			if (!space)
 				return;
 			var arr = upstream ? space._upstreams : space._listeners;
