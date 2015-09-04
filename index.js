@@ -195,6 +195,11 @@
 		set: function(path, value) {
 			if (!path.forEach)
 				path = path.split('.');
+			if (path[0] == '$parent') {
+				if (this.parent)
+					return this.parent.set(path.slice(1), value);
+				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
+			}
 			this.data = this.data || {};
 			var old = setProp(this.data, path, value);
 			if (old !== value)
@@ -204,6 +209,11 @@
 		push: function(path, value) {
 			if (!path.forEach)
 				path = path.split('.');
+			if (path[0] == '$parent') {
+				if (this.parent)
+					return this.parent.push(path.slice(1), value);
+				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
+			}
 			this.data = this.data || {};
 			var arr = getProp(this.data, path);
 			if (!arr) {
@@ -216,18 +226,23 @@
 			});
 			return this;
 		},
-		del: function(path, arrayItem) {
+		del: function(path) {
 			var key;
 			if (!path.forEach)
 				path = path.split('.');
 			else
 				path = path.slice();
+			if (path[0] == '$parent') {
+				if (this.parent)
+					return this.parent.del(path.slice(1));
+				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
+			}
 			key = path.pop();
 			var parent = getProp(this.data, path);
 			if (parent)
 				if (parent.forEach) {
 					var index = parseInt(key, 10);
-					arr.splice(index, 1);
+					parent.splice(index, 1);
 					this.notify('removeAt', path, null, {
 						index: index
 					});
@@ -238,13 +253,26 @@
 			return this;
 		},
 		get: function(path) {
+			if (!path.forEach)
+				path = path.split('.');
+			if (path[0] == '$parent') {
+				if (this.parent)
+					return this.parent.get(path.slice(1));
+				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
+			}
 			return getProp(this.data, path);
 		},
 		subscribe: function(path, fn, upstream) {
 			if (!path.forEach)
 				path = path.split('.');
-			var space = this.map;
-			if (path[0] !== '$this')
+			var space;
+			if (path[0] === '$this')
+				space = this.map;
+			else if (path[0] === '$parent') {
+				if (this.parent)
+					return this.parent.subscribe(path.slice(1), fn, upstream);
+				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
+			} else
 				space = getProp(this.map, path);
 			if (upstream) {
 				if (!space)
