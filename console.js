@@ -1,79 +1,91 @@
 /*
 	Times : 
-
 			nodejs : 23ms/1K (165ms/10K)  new node + new query + exec query + toString
 			browser : 75ms/1K (790ms/10K)   new node + new query + exec query + toString
  
  			nodejs :  37 ms / 10K  					toString
 			browser : 174 ms / 10K (18ms/1000) 		toString
 
-
 			browser 	65 ms / 1K 					body.appendChild(render())
 			browser 	60 ms / 1K 					body.innerHTML = toString())
-
  */
 
-var y = require("./index");
-//______________________________________________ TESTS
+if (typeof require !== 'undefined')
+	yamvish = require("./index");
+var y = yamvish;
+//______________________________________________ TESTS BROwSER
 try {
-
 	var q = y()
-		.set('test', 'world')
-		.set('deep', 'DEEEEEP')
-		.set('items', ["john", "biloud", "pirlouit"])
-		.set('articles', [{
-			title: 'MARCO'
-		}, {
-			title: 'SOLIDE'
-		}])
-		.attr('hello', '{{ test }}')
+		//.set('test', 'world')
+		//.set('deep', 'DEEEEEP')
+		//.set('items', ["john", "biloud", "pirlouit"])
+		//.set('amis', [{title:'MARCO'},{title:'CEDRIC'}])
+		.attr('some', '{{ test }}')
 		.setClass('zoo')
 		.div(
 			y().text('hello {{ test }}')
+			.click(function(context, event) {
+				context.push('items', Math.random());
+				//console.log("click : ", this, context, event);
+			})
 		)
 		.div(
-			y().setClass('haaaaaaaaaa', 'foo')
-
+			y().setClass('haaaaaaaaaa', 'active')
 			.tag('ul',
 				y().setClass('bloupiiiiiiii')
 				.each('items', y().tag('li', y().text('{{ $this }}')))
 			)
 			.tag('ul',
 				y().setClass('zzzzzzzzzzz')
-				.each('articles', y().tag('li', y().text('{{ title }}')))
+				.each('amis', y().tag('li',
+					y()
+					.attr('fromParent', '{{ $parent.test }}')
+					.text('soooooooo {{ title }}')
+				))
 			)
 			.div(
 				y().text('{{ deep }} div')
 			)
 			.tag('span', y().text('deep inner span'))
 		)
-		.tag('span', y().text('rooo'))
+		.tag('span', y().text('rooo'));
 
+	document.body.innerHTML = '';
 
+	var context = new y.Context({
+		test: 'world',
+		deep: 'foo',
+		active: false,
+		items: ["john", "biloud", "pirlouit"],
+		amis: [{
+			title: 'MARCO'
+		}, {
+			title: 'CEDRIC'
+		}]
+	});
 
-	//var q2 = y().set('items', ['bloui', 'hghg', 'zreezrezrez']).set('deep', 'soooo powerful');
-
-	console.time("t")
-	for (var i = 0; i < 1; ++i) {
-
-
-		var o = new y.Virtual('div', new y.Context());
-		q.call(o);
-
-		//		q2.call(o);
-		// o.query();
-		//document.body.appendChild(
-		//o.render()
-		//);
-		//console.log(
-		o.toString()
-			// , o
-			//)
+	for (var i = 0; i < 100; ++i) {
+		var o = new y.Virtual('div');
+		q.call(o, context);
+		document.body.appendChild(o.toElement());
 	}
-	console.timeEnd("t")
-		//o
+
+	console.time("t");
+
+	context.set('active', true)
+		.set('items.1', 'lollipop !')
+		.set('test', 'YAMOO !')
+		.push('items', 'johnetta')
+		.push('amis', {
+			title: 'philippe'
+		})
+		.del('items.2')
+		.del('amis.1')
+
+	console.timeEnd("t");
+
 } catch (e) {
-	console.log("error : ", e);
+	console.log("error : ", e, e.stack);
 }
 /*
 
