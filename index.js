@@ -456,10 +456,23 @@
 		setClass: function(name, flag) {
 			var len = arguments.length;
 			return this.done(function() {
-				if (flag || len == 1)
-					this.classList.add(name);
-				else
-					this.classList.remove(name);
+				var self = this;
+				var applyClass = function(type, path, newValue) {
+					if (newValue) {
+						self.classList.add(name);
+						if (self.el)
+							self.el.classList.add(name);
+					} else {
+						self.classList.remove(name);
+						if (self.el)
+							self.el.classList.remove(name);
+					}
+				};
+				if (flag) {
+					(this.binds = this.binds || []).push(context.subscribe(flag, applyClass));
+					applyClass('set', null, context.get(flag));
+				} else
+					applyClass('set', null, true);
 			});
 		},
 		on: function(name, handler) {
