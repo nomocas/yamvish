@@ -5,16 +5,10 @@
 				still data-*
 			from String
 
-		observable@
-			map ?
-			third party ?
-
 		context
-			still $this and $parent
+			still $parent
 
 		request and c3po
-
-		each 						OK
 
 		views pool
 
@@ -22,39 +16,21 @@
 
 		client 
 
-
-		.all 			OK
-
-
 		promise management : catch end render / load
-
-
-		y.from
-
 
 		y.dependent('this.bloupi', 'foo', function(bloupi, foo){});
 
-
-		if('this.initialised', ..., ...)			OK
-		ifnot('this.initialised', ..., ...)			OK
-
-		query.call(node, context)
+		if('!initialised', ..., ...)
 
 		query.call() ==> produce a virtual node
 
 		.log familly
 
-
-
 		view  = mix of Virtual + Query + own Context
-
 		==> keep query queue in view
-
 		==> allow up/bottom with query
 
-
-		click etc
-		.handler
+		mount/umount event
 */
 (function() {
 
