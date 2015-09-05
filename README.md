@@ -164,7 +164,7 @@ Exactly the same example than above (but a really few detail... could you find i
 
 ## API
 
-### Classes 
+### Main Classes 
 
 Templating chainable API
 - y.Template
@@ -193,14 +193,9 @@ Observable data map that holds also event's handlers.
 	- reset(value)
 	- notify/notifyAll
 
-Interpolable string manager : (You should never use it directly)
-- y.Interpolable 	
-	- output(context)
-	- subscribeTo(context, path, callback)
-
 View : It's just there to provides easy structuration. Absolutly optional.
 - y.View
-	- mix of Template and Virtual API + holds a context instance (y.Context)
+	- compilation of Template + Virtual + Context API
 	- there is nothing that you could do with View that you couldn't do with other classes. 
 
 
@@ -216,6 +211,10 @@ String Parser :
 Component Registration
 - y.addComponent(name, template || view);
 
+Interpolable string manager : (You should never use it directly)
+- y.Interpolable 	
+	- output(context)
+	- subscribeTo(context, path, callback)
 
 
 
