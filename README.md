@@ -180,6 +180,7 @@ Minimal mockup of standard (modern) DOM node :
 	- addEventListener/removeEventListener
 	- appendChild
 	- classList.add, classList.remove
+	- toElement()/toString()
 
 Observable data map that holds also event's handlers.
 - y.Context 		
