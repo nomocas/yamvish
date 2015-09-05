@@ -98,7 +98,8 @@ Even if it's easily usable with other third party routers or ressources/model ma
 		.set('users.1', 'William')
 		.push('users', 'Bob')
 		.push('articles', {
-			title: 'Faster is Better'
+			title: 'Faster is Better',
+			content:'dolor sit amet...'
 		})
 		.del('users.0');
 ```
@@ -109,20 +110,22 @@ Exactly the same example than above (but a really few detail... could you find i
 
 ```html 
 <body>
-	<h1>{{ title }}</h1>
-	<input type="text" value="{{ user }}">
-	<button data-template="click(addUser).setClass('your-class', 'active')">add user</button>
 	<div>
-		<h2>Users</h2>
-		<ul data-template="each(users)">
-			<li><a href="#/user/{{ $this }}">{{ $this }}</a></li>
-		</ul>
-	</div>
-	<div>
-		<h2>Articles</h2>
-		<div data-template="each(articles)">
-			<h3>{{ title }}</h3>
-			<p>{{ content }}</p>
+		<h1>{{ title }}</h1>
+		<input type="text" value="{{ user }}">
+		<button data-template="click(addUser).setClass('your-class', 'active')">add user</button>
+		<div>
+			<h2>Users</h2>
+			<ul data-template="each(users)">
+				<li><a href="#/user/{{ $this }}">{{ $this }}</a></li>
+			</ul>
+		</div>
+		<div>
+			<h2>Articles</h2>
+			<div data-template="each(articles)">
+				<h3>{{ title }}</h3>
+				<p>{{ content }}</p>
+			</div>
 		</div>
 	</div>
 
@@ -153,7 +156,8 @@ Exactly the same example than above (but a really few detail... could you find i
 		.set('users.1', 'William')
 		.push('users', 'Bob')
 		.push('articles', {
-			title: 'Faster is Better'
+			title: 'Faster is Better',
+			content:'dolor sit amet'
 		})
 		.del('users.0');
 	</script>
@@ -188,6 +192,7 @@ Observable data map that holds also event's handlers.
 - y.Context 		
 	- subscribe/unsubscribe
 	- get(path), set(path, value), push(path, value), del(path)
+	- reset(value)
 	- notify/notifyAll
 
 Interpolable string manager : (You should never use it directly)
