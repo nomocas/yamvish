@@ -46,7 +46,7 @@ Even if it's easily usable with other third party routers or ressources/model ma
 	var template = y()
 		.h(1,'{{ title }}')
 		.input('text', '{{ user }}')
-		.button('add item', y().setClass('your-class', 'active').click('addItem'))
+		.button('add user', y().setClass('your-class', 'active').click('addUser'))
   		.div(
 			y().h(2, 'Users')
 			.ul(
@@ -61,9 +61,9 @@ Even if it's easily usable with other third party routers or ressources/model ma
 			y()
 			.h(2, 'Articles')
 			.each('articles', 
-					y()
-					.h(3, '{{ title }}')
-					.p('{{ content }}')
+				y()
+				.h(3, '{{ title }}')
+				.p('{{ content }}')
 			)
 		);
 
@@ -80,7 +80,7 @@ Even if it's easily usable with other third party routers or ressources/model ma
 		}]
 	},{
     	// handlers
-    	addItem : function(context, event) {
+    	addUser : function(context, event) {
 			context.push('users', context.get('user'));
 		}
   	});
@@ -111,7 +111,7 @@ Exactly the same example than above (but a really few detail... could you find i
 <body>
 	<h1>{{ title }}</h1>
 	<input type="text" value="{{ user }}">
-	<button data-template="click(addItem).setClass('your-class', 'active')">add Item</button>
+	<button data-template="click(addUser).setClass('your-class', 'active')">add user</button>
 	<div>
 		<h2>Users</h2>
 		<ul data-template="each(users)">
@@ -142,7 +142,7 @@ Exactly the same example than above (but a really few detail... could you find i
 			}]
 		},{
 	    	// handlers
-	    	addItem : function(context, event) {
+	    	addUser : function(context, event) {
 				context.push('users', context.get('user'));
 			}
 	  	});
