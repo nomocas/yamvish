@@ -87,8 +87,8 @@ Even if it's easily usable with other third party routers or ressources/model ma
   
   	// create a virtual node (could be a document.createElement('div'))
 	var node = new y.Virtual('div');
-	// apply query on it and bind it to context
-	q.call(node, context);
+	// apply template on it and bind it to context
+	template.call(node, context);
 
 	// (if virtual node : render to DOMElement then) append it somewhere
 	document.body.appendChild(node.toElement());
@@ -104,6 +104,8 @@ Even if it's easily usable with other third party routers or ressources/model ma
 ```
 
 ## js/html mix Example
+
+Exactly the same example than above (but a really few detail... could you find it ? :))
 
 ```html 
 <body>
