@@ -22,13 +22,13 @@
 
 		if('!initialised', ..., ...)
 
-		query.call() ==> produce a virtual node
+		template.call() ==> produce a virtual node
 
 		.log familly
 
 		view  = mix of Virtual + Template + own Context
-		==> keep query queue in view
-		==> allow up/bottom with query
+		==> keep template queue in view
+		==> allow up/bottom with template
 
 		mount/umount event
 */
@@ -369,7 +369,7 @@
 		call: function(caller, context) {
 			return execQueue(caller, this._queue, context ||  caller.context);
 		},
-		//_____________________________ BASE Template handler (every query handler is from one of those two types (done or catch))
+		//_____________________________ BASE Template handler (every template handler is from one of those two types (done or catch))
 		done: function(callback) {
 			this._queue.push({
 				type: 'done',
@@ -597,9 +597,9 @@
 
 				if (!template)
 					if (!y.isServer)
-						template = this._eachTemplate = elementChildrenToQuery(this);
+						template = this._eachTemplate = elementChildrenToTemplate(this);
 					else
-						throw produceError('no template for .each query handler', this);
+						throw produceError('no template for .each template handler', this);
 
 				var render = function(type, path, value, opt) {
 					// console.log('render : ', type, path, value, opt);
@@ -837,39 +837,39 @@
 	/**
 	 * DOM element.childNodes parsing to y.Template
 	 * @param  {[type]} element [description]
-	 * @param  {[type]} query   [description]
+	 * @param  {[type]} template   [description]
 	 * @return {[type]}         [description]
 	 */
-	function elementChildrenToQuery(element, query) {
-		var t = query || y();
+	function elementChildrenToTemplate(element, template) {
+		var t = template || y();
 		for (var i = 0, len = element.childNodes.length; i < len; ++i)
-			elementToQuery(element.childNodes[i], t);
+			elementToTemplate(element.childNodes[i], t);
 		return t;
 	};
 	/**
 	 * DOM element parsing to y.Template
 	 * @param  {[type]} element [description]
-	 * @param  {[type]} query   [description]
+	 * @param  {[type]} template   [description]
 	 * @return {[type]}         [description]
 	 */
-	function elementToQuery(element, query) {
-		var t = query || y();
+	function elementToTemplate(element, template) {
+		var t = template || y();
 		switch (element.nodeType) {
 			case 1:
 				// if (element.tagName.toLowerCase() === 'script')
 				// console.log('CATCH script');
-				var childQuery = y();
-				elementChildrenToQuery(element, childQuery);
+				var childTemplate = y();
+				elementChildrenToTemplate(element, childTemplate);
 				if (element.id)
-					childQuery.id(element.id)
+					childTemplate.id(element.id)
 				if (element.attributes.length)
 					for (var j = 0, len = element.attributes.length; j < len; ++j) {
 						var o = element.attributes[j];
-						childQuery.attr(o.name, o.value);
+						childTemplate.attr(o.name, o.value);
 					}
 				for (var l = 0; l < element.classList; ++l)
-					childQuery.setClass(element.classList[l]);
-				t.tag.apply(t, [element.tagName.toLowerCase(), childQuery]);
+					childTemplate.setClass(element.classList[l]);
+				t.tag.apply(t, [element.tagName.toLowerCase(), childTemplate]);
 				break;
 			case 3:
 				t.text(element.textContent);
@@ -878,10 +878,17 @@
 				console.log('element is CDATA : ', element);
 				break;
 			default:
-				console.warn('y.elementToQuery : DOM node not managed : type : %s, ', element.nodeType, element);
+				console.warn('y.elementToTemplate : DOM node not managed : type : %s, ', element.nodeType, element);
 		}
 		return t;
 	};
+
+	function stringToTemplate(string) {
+		var r = /\s*(\w+)(?:="?(\w+)"?)?/gi
+		while (match = r.exec(' type="bloupi" foo href="ffdf" blu=bar')) {
+			console.log("match : ", match)
+		}
+	}
 	//____________________________________________________ VIEWS
 
 	var View = function(template, data, handlers, name) {
@@ -906,8 +913,8 @@
 	y.Context = Context;
 	y.Template = Template;
 
-	y.elementChildrenToQuery = elementChildrenToQuery;
-	y.elementToQuery = elementToQuery;
+	y.elementChildrenToTemplate = elementChildrenToTemplate;
+	y.elementToTemplate = elementToTemplate;
 	y.interpolable = interpolable;
 	y.Virtual = Virtual;
 	y.Interpolable = Interpolable;
