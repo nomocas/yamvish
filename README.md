@@ -193,7 +193,7 @@ Observable data map that holds also event's handlers.
 	- reset(value)
 	- notify/notifyAll
 
-View : It's just there to provides easy structuration. Absolutly optional.
+View : It's just there to provide easy structuration. Absolutly optional.
 - y.View
 	- compilation of Template + Virtual + Context API
 	- there is nothing that you could do with View that you couldn't do with other classes. 
