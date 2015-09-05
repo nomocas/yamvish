@@ -58,11 +58,9 @@ Even if it's easily usable with other third party routers or ressources/model ma
 			)
 		)
 		.div(
-			y()
-			.h(2, 'Articles')
+			y().h(2, 'Articles')
 			.each('articles', 
-				y()
-				.h(3, '{{ title }}')
+				y().h(3, '{{ title }}')
 				.p('{{ content }}')
 			)
 		);
@@ -80,8 +78,8 @@ Even if it's easily usable with other third party routers or ressources/model ma
 		}]
 	},{
     	// handlers
-    	addUser : function(context, event) {
-			context.push('users', context.get('user'));
+    	addUser : function(event) {
+			this.push('users', this.get('user'));
 		}
   	});
   
@@ -145,8 +143,8 @@ Exactly the same example than above (but a really few detail... could you find i
 			}]
 		},{
 	    	// handlers
-	    	addUser : function(context, event) {
-				context.push('users', context.get('user'));
+	    	addUser : function(event) {
+				this.push('users', this.get('user'));
 			}
 	  	});
 
