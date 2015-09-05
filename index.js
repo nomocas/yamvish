@@ -26,7 +26,7 @@
 
 		.log familly
 
-		view  = mix of Virtual + Query + own Context
+		view  = mix of Virtual + Template + own Context
 		==> keep query queue in view
 		==> allow up/bottom with query
 
@@ -106,7 +106,7 @@
 			path = path.split('.');
 		var tmp = from;
 		for (var i = 0, len = path.length; i < len; ++i)
-			if (tmp && !(tmp = tmp[path[i]]))
+			if (!tmp || (tmp = tmp[path[i]]) === undefined)
 				return;
 		return tmp;
 	}
@@ -167,25 +167,28 @@
 	}
 	//_______________________________________________________ DATA BIND CONTEXT
 
-	function Context(data, parent, subscribeTo) {
-		this.data = data || {};
+	function Context(data, handlers, parent, path) {
+		this.data = (data !== undefined) ? data : {};
 		this.parent = parent;
+		this.handlers = handlers || {};
 		this.map = {};
-		this.subscribedTo = subscribeTo;
+		this.path = path;
 		var self = this;
-		if (subscribeTo)
-			this.bind = parent.subscribe(subscribeTo, function(type, path, value) {
+		if (path)
+			this.bind = parent.subscribe(path, function(type, path, value) {
 				self.reset(value);
 			});
 	}
 
 	Context.prototype = {
-		destroy: function() {
+		destroy: function() { // at least for special trick, should not be called directly. 
 			if (this.bind)
 				this.bind();
 			this.bind = null;
 			this.parent = null;
 			this.data = null;
+			this.handlers = null;
+			this.map = null;
 		},
 		reset: function(data) {
 			this.data = data || {};
@@ -195,7 +198,9 @@
 		set: function(path, value) {
 			if (!path.forEach)
 				path = path.split('.');
-			if (path[0] == '$parent') {
+			if (path[0] === '$this')
+				return this.reset(value);
+			if (path[0] === '$parent') {
 				if (this.parent)
 					return this.parent.set(path.slice(1), value);
 				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
@@ -215,7 +220,12 @@
 				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
 			}
 			this.data = this.data || {};
-			var arr = getProp(this.data, path);
+
+			var arr;
+			if (path[0] === '$this')
+				arr = this.data;
+			else
+				arr = getProp(this.data, path);
 			if (!arr) {
 				arr = [];
 				setProp(this.data, path, arr);
@@ -227,7 +237,6 @@
 			return this;
 		},
 		del: function(path) {
-			var key;
 			if (!path.forEach)
 				path = path.split('.');
 			else
@@ -237,7 +246,7 @@
 					return this.parent.del(path.slice(1));
 				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
 			}
-			key = path.pop();
+			var key = path.pop();
 			var parent = getProp(this.data, path);
 			if (parent)
 				if (parent.forEach) {
@@ -255,6 +264,8 @@
 		get: function(path) {
 			if (!path.forEach)
 				path = path.split('.');
+			if (path[0] === '$this')
+				return this.data;
 			if (path[0] == '$parent') {
 				if (this.parent)
 					return this.parent.get(path.slice(1));
@@ -332,6 +343,8 @@
 			// console.log('Notify : ', type, path, value, opt);
 			if (!path.forEach)
 				path = path.split('.');
+			if (path[0] === '$this')
+				path = [];
 			var space = this.map;
 			for (var i = 0, len = path.length; i < len; ++i) {
 				if (space && !(space = space[path[i]]))
@@ -347,14 +360,16 @@
 
 	//_______________________________________________________ QUERY
 
-	function Query(q) {
+	function Template(q) {
 		this._queue = q ? q._queue.slice() : [];
 	};
 
-	Query.prototype = {
+	Template.prototype = {
+		//_____________________________ APPLY QUERY ON NODE
 		call: function(caller, context) {
 			return execQueue(caller, this._queue, context ||  caller.context);
 		},
+		//_____________________________ BASE Template handler (every query handler is from one of those two types (done or catch))
 		done: function(callback) {
 			this._queue.push({
 				type: 'done',
@@ -369,6 +384,7 @@
 			});
 			return this;
 		},
+		//_____________________________ Conditional branching
 		'if': function(condition, trueCallback, falseCallback) {
 			var type = typeof condition;
 			if (type === 'string')
@@ -383,7 +399,7 @@
 						return falseCallback.call(self, context);
 				};
 				if (condition && condition.__interpolable__) {
-					ok = condition.output(context.data);
+					ok = condition.output(context);
 					(this.binds = this.binds || []).push(condition.subscribeTo(context, exec));
 				} else if (type === 'function')
 					ok = condition.call(this, context);
@@ -391,6 +407,7 @@
 			});
 			return this;
 		},
+		//_____________________________ Wait for multi branches ends.
 		all: function() {
 			var args = arguments;
 			return this.done(function() {
@@ -400,6 +417,7 @@
 				return Promise.all(promises);
 			});
 		},
+		//________________________________ CONTEXT and Assignation
 		set: function(path, value) {
 			return this.done(function(context) {
 				if (!context)
@@ -407,14 +425,35 @@
 				context.set(path, value);
 			});
 		},
+		push: function(path, value) {
+			return this.done(function(context) {
+				context.push(path, value);
+			});
+		},
+		del: function(path) {
+			return this.done(function(context) {
+				context.del(path);
+			});
+		},
+		handlers: function(name, handler) {
+			return this.done(function(context) {
+				(context.handlers = context.handlers || {})[name] = handler;
+			});
+		},
 		context: function(value) {
 			var parentPath;
 			if (typeof value === 'string')
 				parentPath = value;
 			return this.done(function(context) {
-				this.context = new Context(parentPath ? null : value, context, parentPath ? parentPath : null);
+				this.context = new Context(parentPath ? null : value, null, context, parentPath ? parentPath : null);
 			});
 		},
+		with: function(path) {
+			return this.done(function(context) {
+				this.childrenContext = new Context(null, null, context, path);
+			});
+		},
+		//__________________________________  REMOVE/DESTROY NODE
 		destroy: function() {
 			return this.done(function(context) {
 				destroy(this, context);
@@ -425,11 +464,7 @@
 				remove(this);
 			});
 		},
-		with: function(path) {
-			return this.done(function(context) {
-				this.childrenContext = new Context(null, context, path);
-			});
-		},
+		//__________________________________ Attributes
 		attr: function(name, value) {
 			if (typeof value === 'string')
 				value = interpolable(value);
@@ -439,14 +474,22 @@
 					(this.binds = this.binds || []).push(value.subscribeTo(context, function(type, path, newValue) {
 						self.setAttribute(name, newValue);
 					}));
-					this.setAttribute(name, value.output(context.data));
+					this.setAttribute(name, value.output(context));
 				} else
 					this.setAttribute(name, value);
 			});
 		},
+		id: function(id) {
+			return this.done(function() {
+				this.id = id;
+			});
+		},
+		val: function(value) {
+			return this.attr('value', value);
+		},
 		setClass: function(name, flag) {
 			var len = arguments.length;
-			return this.done(function() {
+			return this.done(function(context) {
 				var self = this;
 				var applyClass = function(type, path, newValue) {
 					if (newValue) {
@@ -466,6 +509,7 @@
 					applyClass('set', null, true);
 			});
 		},
+		//___________________________________ EVENTS LISTENER
 		on: function(name, handler) {
 			return this.done(function(context) {
 				var self = this,
@@ -477,28 +521,23 @@
 				} else
 					h = handler;
 				this.addEventListener(name, function(evt) {
-					h.call(self, context, evt);
+					return h.call(context, evt);
 				});
 			});
-		},
-		click: function(handler) {
-			return this.on('click', handler);
 		},
 		off: function(name, handler) {
 			return this.done(function() {
 				this.removeEventListener(name, handler);
 			});
 		},
-		val: function(value) {
-			return this.attr('value', value);
-		},
+		//_______________________________________ HTML TAGS
 		text: function(value) {
 			if (typeof value === 'string')
 				value = interpolable(value);
 			return this.done(function(context) {
 				var node, val;
 				if (value.__interpolable__) {
-					val = value.output(context.data);
+					val = value.output(context);
 					(this.binds = this.binds || []).push(value.subscribeTo(context, function(type, path, newValue) {
 						node.textContent = newValue;
 						if (node.el)
@@ -515,11 +554,6 @@
 				this.appendChild(node);
 			});
 		},
-		id: function(id) {
-			return this.done(function() {
-				this.id = id;
-			});
-		},
 		tag: function(name) { // arguments : name, q1, q2, ...
 			var args = arguments;
 			return this.done(function(context) {
@@ -529,36 +563,37 @@
 				else
 					node = document.createElement(name);
 				var temp;
-				for (var i = 1, len = args.length; i < len; ++i) {
-					temp = args[i].call(node, this.childrenContext || context);
-				}
+				for (var i = 1, len = args.length; i < len; ++i)
+					if (typeof args[i] === 'string')
+						temp = y().text(args[i]).call(node, this.childrenContext || context);
+					else
+						temp = args[i].call(node, this.childrenContext || context);
 				this.appendChild(node);
 			});
 		},
-		div: function() {
-			var args = Array.prototype.slice.call(arguments);
-			args.unshift('div');
+		a: function(href) {
+			var args = Array.prototype.slice.call(arguments, 1);
+			args.unshift('a', y().attr('href', href));
 			return this.tag.apply(this, args);
 		},
-		span: function() {
-			var args = Array.prototype.slice.call(arguments);
-			args.unshift('span');
+		input: function(type, value) {
+			var args = Array.prototype.slice.call(arguments, 2);
+			args.unshift('input', y().attr('type', type).attr('value', value).on('input', function(context, event) {
+				console.log('input.input : ', event);
+			}));
 			return this.tag.apply(this, args);
 		},
-		ul: function() {
-			var args = Array.prototype.slice.call(arguments);
-			args.unshift('ul');
+		h: function(level) {
+			var args = Array.prototype.slice.call(arguments, 1);
+			args.unshift('h' + level);
 			return this.tag.apply(this, args);
 		},
-		li: function() {
-			var args = Array.prototype.slice.call(arguments);
-			args.unshift('li');
-			return this.tag.apply(this, args);
-		},
+		//___________________________________________ ARRAY
 		each: function(path, templ) { // arguments : path, q1, q2, ...
 
 			return this.done(function(context) {
-				var template = templ || this._eachTemplate;
+				var template = templ || this._eachTemplate,
+					self = this;
 
 				if (!template)
 					if (!y.isServer)
@@ -575,35 +610,22 @@
 						case 'set':
 							emptyNode(self);
 							for (var i = 0, len = value.length; i < len; ++i)
-								template.call(self, new Context(value[i], context, path + '.' + i));
+								template.call(self, new Context(value[i], null, context, path + '.' + i));
 							break;
 						case 'removeAt':
 							destroy(self.childNodes[opt.index]);
 							self.childNodes.splice(opt.index, 1);
 							break;
 						case 'push':
-							template.call(self, new Context(value, context, path + '.' + opt.index));
-							if (self.el)
-								self.el.appendChild(self.childNodes[self.childNodes.length - 1].toElement());
+							template.call(self, new Context(value, null, context, path + '.' + opt.index));
 							break;
 					}
 				};
 
-				var self = this;
 				(this.binds = this.binds || []).push(context.subscribe(path, render));
 				var data = context.get(path);
 				if (data)
 					return render('set', path, data);
-			});
-		},
-		push: function(path, value) {
-			return this.done(function(context) {
-				context.push(path, value);
-			});
-		},
-		del: function(path) {
-			return this.done(function(context) {
-				context.del(path);
 			});
 		},
 		//__________ STILL TO DO
@@ -633,6 +655,21 @@
 			});
 		}
 	};
+
+	// Complete tag list
+	['div', 'span', 'ul', 'li', 'button', 'p'].forEach(function(tag) {
+		Template.prototype[tag] = function() {
+			var args = Array.prototype.slice.call(arguments);
+			args.unshift(tag);
+			return this.tag.apply(this, args);
+		};
+	});
+	// Complete events list
+	['click', 'blur', 'focus'].forEach(function(eventName) {
+		Template.prototype[eventName] = function(handler) {
+			return this.on(eventName, handler);
+		}
+	});
 	//_______________________________________________________ CLASS LIST
 
 	/**
@@ -689,6 +726,8 @@
 		},
 		appendChild: function(child) {
 			(this.childNodes = this.childNodes || []).push(child);
+			if (this.el)
+				this.el.appendChild(child.toElement());
 			return child;
 		},
 		// _____________________________ OUTPUT
@@ -759,7 +798,7 @@
 				self = this;
 			for (var i = 0, len = this.dependencies.length; i < len; ++i)
 				binds.push(context.subscribe(this.dependencies[i], function(type, path, newValue) {
-					callback(type, path, self.output(context.data));
+					callback(type, path, self.output(context));
 				}));
 			if (binds.length == 1)
 				return binds[0];
@@ -769,16 +808,16 @@
 				});
 			};
 		},
-		output: function(data) {
+		output: function(context) {
 			if (this.directOutput)
-				return getProp(data, this.directOutput);
+				return context.get(this.directOutput);
 			var out = "",
 				odd = true;
 			for (var j = 0, len = this.splitted.length; j < len; ++j) {
 				if (odd)
 					out += this.splitted[j];
 				else
-					out += getProp(data, this.splitted[j]);
+					out += context.get(this.splitted[j]);
 				odd = !odd;
 			}
 			return out;
@@ -796,7 +835,7 @@
 	//_______________________________________________________ DOM PARSING
 
 	/**
-	 * DOM element.childNodes parsing to y.Query
+	 * DOM element.childNodes parsing to y.Template
 	 * @param  {[type]} element [description]
 	 * @param  {[type]} query   [description]
 	 * @return {[type]}         [description]
@@ -808,7 +847,7 @@
 		return t;
 	};
 	/**
-	 * DOM element parsing to y.Query
+	 * DOM element parsing to y.Template
 	 * @param  {[type]} element [description]
 	 * @param  {[type]} query   [description]
 	 * @return {[type]}         [description]
@@ -839,21 +878,33 @@
 				console.log('element is CDATA : ', element);
 				break;
 			default:
-				console.warn('k : error : DOM node not managed : type : %s, ', element.nodeType, element);
+				console.warn('y.elementToQuery : DOM node not managed : type : %s, ', element.nodeType, element);
 		}
 		return t;
 	};
+	//____________________________________________________ VIEWS
 
-	//____________________________________________________ END PARSING
+	var View = function(template, data, handlers, name) {
+		this.context = new Context(data, handlers);
+		if (name)
+			y.addComponent(name, this);
+		this._queue = template ? template._queue : [];
+	};
 
+	//____________________________________________________ MISC
 
 	var y = function(q) {
-		return new Query(q);
+		return new Template(q);
+	};
+
+	y.components = {};
+	y.addComponent = function(name, template /* or view instance */ ) {
+		y.components[name] = template;
 	};
 
 	y.isServer = (typeof process !== 'undefined') && process.versions && process.versions.node;
 	y.Context = Context;
-	y.Query = Query;
+	y.Template = Template;
 
 	y.elementChildrenToQuery = elementChildrenToQuery;
 	y.elementToQuery = elementToQuery;
