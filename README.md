@@ -133,7 +133,7 @@ Exactly the same example than above (but a really few detail... could you find i
 	<script type="text/javascript">
 
 		// define a context
-		var context = new y.Context({
+		var context = new yamvish.Context({
 	    	// data
 			title: 'Simpler is Better',
 			active: false,
