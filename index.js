@@ -142,6 +142,8 @@
 		for (; i < len; ++i)
 			if (tmp && !tmp[path[i]])
 				tmp = tmp[path[i]] = {};
+			else
+				tmp = tmp[path[i]];
 		if (tmp) {
 			old = tmp[path[i]];
 			tmp[path[i]] = value;
