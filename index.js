@@ -518,7 +518,21 @@
 			});
 		},
 		val: function(value) {
-			return this.attr('value', value);
+			if (typeof value === 'string')
+				value = interpolable(value);
+			return this.done(function(context) {
+				var self = this;
+				if (value.__interpolable__) {
+					y().on('input', function(event) {
+						context.set(value.directOutput, event.target.value);
+					}).call(this, context);
+					(this.binds = this.binds || []).push(value.subscribeTo(context, function(type, path, newValue) {
+						self.setAttribute('value', newValue);
+					}));
+					this.setAttribute('value', context.get(value.directOutput));
+				} else
+					this.setAttribute('value', value);
+			});
 		},
 		setClass: function(name, flag) {
 			var len = arguments.length;
@@ -616,9 +630,10 @@
 		},
 		input: function(type, value) {
 			var args = Array.prototype.slice.call(arguments, 2);
-			args.unshift('input', y().attr('type', type).attr('value', value).on('input', function(context, event) {
-				console.log('input.input : ', event);
-			}));
+			var template = y().attr('type', type);
+			if (value)
+				template.val(value);
+			args.unshift('input', template);
 			return this.tag.apply(this, args);
 		},
 		h: function(level) {
@@ -967,6 +982,7 @@
 
 	//________________________________________________ END VIEW
 
+	y.mainContaxt = null;
 	y.components = {};
 	y.addComponent = function(name, template /* or view instance */ ) {
 		y.components[name] = template;
