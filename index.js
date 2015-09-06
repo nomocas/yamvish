@@ -5,20 +5,14 @@
 				still data-*
 			from String
 
-		context
-			still $parent
-
 		request and c3po
 
 		views pool
 
-		route
-
-		client 
+		.client( t1, t2, ...)
+		.server(t1, t2, ...)
 
 		promise management : catch end render / load
-
-		y.dependent('this.bloupi', 'foo', function(bloupi, foo){});
 
 		if('!initialised', ..., ...)
 
@@ -26,11 +20,26 @@
 
 		.log familly
 
-		view  = mix of Virtual + Template + own Context
+		view  = mix of Virtual + Template + Context
 		==> keep template queue in view
 		==> allow up/bottom with template
 
+		==> view.context = view; 
+
 		mount/umount event
+
+		EAch : children  : place els in Virtual Node (could be many)
+			==> is natural : no need... each node has it's own dom element
+		//______________________
+		y.dependent('bloupi', 'foo', function(bloupi, foo){});
+		
+		==> a dependent function should only be a value in context.data
+			that is registred to dependencies (as a Interpolable)
+
+		y.applyToDOM(node | selector, template)		==> apply template on dom element (select it if selector)
+
+		y.createDOM(opt) ==> meme opt que new Virtual(opt)
+
 */
 (function() {
 
@@ -131,7 +140,7 @@
 			old,
 			len = path.length - 1;
 		for (; i < len; ++i)
-			if (tmp && !(tmp = tmp[path[i]]))
+			if (tmp && !tmp[path[i]])
 				tmp = tmp[path[i]] = {};
 		if (tmp) {
 			old = tmp[path[i]];
@@ -165,26 +174,42 @@
 			node.parentNode = null;
 		}
 	}
+
+	function mergeProto(src, target) {
+		for (var i in src) {
+			if (target[i] === undefined)
+				target[i] = src[i];
+			else if (src[i].__composition__)
+				target[i] = src[i]._clone()._bottom(target[i]);
+			else {
+				target[i] = src[i];
+			}
+		}
+	};
+
 	//_______________________________________________________ DATA BIND CONTEXT
 
-	function Context(data, handlers, parent, path) {
-		this.data = (data !== undefined) ? data : {};
-		this.parent = parent;
-		this.handlers = handlers || {};
+	function Context(opt /*data, handlers, parent, path*/ ) {
+		opt = opt || {};
+		this.data = (opt.data !== undefined) ? opt.data : {};
+		this.parent = opt.parent;
+		this.handlers = opt.handlers || {};
 		this.map = {};
-		this.path = path;
+		this.path = opt.path;
 		var self = this;
-		if (path)
-			this.bind = parent.subscribe(path, function(type, path, value) {
+		if (opt.path)
+			(this.binds = this.binds || []).push(this.parent.subscribe(opt.path, function(type, path, value) {
 				self.reset(value);
-			});
+			}));
 	}
 
 	Context.prototype = {
 		destroy: function() { // at least for special trick, should not be called directly. 
-			if (this.bind)
-				this.bind();
-			this.bind = null;
+			if (this.binds)
+				this.binds.forEach(function(unbind) {
+					unbind();
+				});
+			this.binds = null;
 			this.parent = null;
 			this.data = null;
 			this.handlers = null;
@@ -219,8 +244,6 @@
 					return this.parent.push(path.slice(1), value);
 				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
 			}
-			this.data = this.data || {};
-
 			var arr;
 			if (path[0] === '$this')
 				arr = this.data;
@@ -246,8 +269,8 @@
 					return this.parent.del(path.slice(1));
 				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
 			}
-			var key = path.pop();
-			var parent = getProp(this.data, path);
+			var key = path.pop(),
+				parent = path.length ? getProp(this.data, path) : this.data;
 			if (parent)
 				if (parent.forEach) {
 					var index = parseInt(key, 10);
@@ -420,8 +443,9 @@
 		//________________________________ CONTEXT and Assignation
 		set: function(path, value) {
 			return this.done(function(context) {
+				context = context || this.context || y.mainContext;
 				if (!context)
-					context = this.context = new Context();
+					throw produceError('no context avaiable to set variable in it. aborting.', this);
 				context.set(path, value);
 			});
 		},
@@ -445,12 +469,20 @@
 			if (typeof value === 'string')
 				parentPath = value;
 			return this.done(function(context) {
-				this.context = new Context(parentPath ? null : value, null, context, parentPath ? parentPath : null);
+				this.context = new Context({
+					data: parentPath ? null : value,
+					parent: context,
+					path: parentPath ? parentPath : null
+				});
 			});
 		},
 		with: function(path) {
 			return this.done(function(context) {
-				this.childrenContext = new Context(null, null, context, path);
+				/*data, handlers, parent, path*/
+				this.childrenContext = new Context({
+					parent: context,
+					path: path
+				});
 			});
 		},
 		//__________________________________  REMOVE/DESTROY NODE
@@ -512,11 +544,12 @@
 		//___________________________________ EVENTS LISTENER
 		on: function(name, handler) {
 			return this.done(function(context) {
-				var self = this,
-					h;
+				var h;
 				if (typeof handler === 'string') {
-					if (!context.handlers)
-						throw produceError('on(%s) : no "%s" handlers define in current context', name, handler);
+					if (!context.handlers) {
+						// console.log('error no handler in context : ', context.handlers);
+						throw produceError('on(' + name + ') : no "' + handler + '" handlers define in current context', this);
+					}
 					h = context.handlers[handler];
 				} else
 					h = handler;
@@ -546,7 +579,9 @@
 				} else
 					val = value;
 				if (this.__yVirtual__) {
-					node = new Virtual('textnode');
+					node = new Virtual({
+						tagName: 'textnode'
+					});
 					node.textContent = val;
 				} else
 					node = document.createTextNode(val);
@@ -559,7 +594,9 @@
 			return this.done(function(context) {
 				var node;
 				if (this.__yVirtual__)
-					node = new Virtual(name);
+					node = new Virtual({
+						tagName: name
+					});
 				else
 					node = document.createElement(name);
 				var temp;
@@ -610,14 +647,23 @@
 						case 'set':
 							emptyNode(self);
 							for (var i = 0, len = value.length; i < len; ++i)
-								template.call(self, new Context(value[i], null, context, path + '.' + i));
+							/*data, handlers, parent, path*/
+								template.call(self, new Context({
+								data: value[i],
+								parent: context,
+								path: path + '.' + i
+							}));
 							break;
 						case 'removeAt':
 							destroy(self.childNodes[opt.index]);
 							self.childNodes.splice(opt.index, 1);
 							break;
 						case 'push':
-							template.call(self, new Context(value, null, context, path + '.' + opt.index));
+							template.call(self, new Context({
+								data: value,
+								parent: context,
+								path: path + '.' + opt.index
+							}));
 							break;
 					}
 				};
@@ -692,12 +738,21 @@
 	 * Virtual Node
 	 * @param {String} tagName the tagName of the virtual node
 	 */
-	function Virtual(tagName, context) {
+	function Virtual(opt /*tagName, context*/ ) {
 		// mock
-		this.tagName = tagName;
+		opt = opt || {};
+		this.tagName = opt.tagName;
 		this.classList = new ClassList();
 		this.__yVirtual__ = true;
-		this.context = context;
+		if (opt.context)
+			this.context = opt.context;
+		var ctx = opt.context || y.mainContext;
+		if (opt.template)
+			if (!ctx)
+				throw produceError("no context could be found when initialising Virtual with template. aborting.", this);
+			else
+				opt.template.call(this, ctx);
+
 	};
 
 	Virtual.prototype  = {
@@ -798,7 +853,7 @@
 				self = this;
 			for (var i = 0, len = this.dependencies.length; i < len; ++i)
 				binds.push(context.subscribe(this.dependencies[i], function(type, path, newValue) {
-					callback(type, path, self.output(context));
+					callback(type, path, self.directOutput ? newValue : self.output(context));
 				}));
 			if (binds.length == 1)
 				return binds[0];
@@ -823,6 +878,7 @@
 			return out;
 		}
 	};
+
 	var splitRegEx = /\{\{\s*([^\}\s]+)\s*\}\}/g;
 
 	function interpolable(string) {
@@ -883,26 +939,27 @@
 		return t;
 	};
 
-	function stringToTemplate(string) {
-		var r = /\s*(\w+)(?:="?(\w+)"?)?/gi
-		while (match = r.exec(' type="bloupi" foo href="ffdf" blu=bar')) {
-			console.log("match : ", match)
-		}
-	}
-	//____________________________________________________ VIEWS
-
-	var View = function(template, data, handlers, name) {
-		this.context = new Context(data, handlers);
-		if (name)
-			y.addComponent(name, this);
-		this._queue = template ? template._queue : [];
-	};
-
-	//____________________________________________________ MISC
+	//____________________________________________________ YAMVISH
 
 	var y = function(q) {
 		return new Template(q);
 	};
+	//____________________________________________________ VIEW
+	y.View = function View(opt) {
+		opt = opt || {};
+		this.context = opt.context = this;
+		if (opt.componentName)
+			y.addComponent(opt.componentName, this);
+		Context.call(this, opt);
+		Virtual.call(this, opt);
+	}
+	mergeProto(Virtual.prototype, y.View.prototype);
+	mergeProto(Template.prototype, y.View.prototype);
+	mergeProto(Context.prototype, y.View.prototype);
+	y.View.prototype.done = function(fn) {
+		fn.call(this, this);
+	};
+	//________________________________________________ END VIEW
 
 	y.components = {};
 	y.addComponent = function(name, template /* or view instance */ ) {
