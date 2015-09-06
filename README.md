@@ -167,11 +167,31 @@ Exactly the same example than above (but a really few detail... could you find i
 ## View example
 
 Exactly the same example than above.
+(A View is simply a compilation of Context, Virtual and Template API)
 
 ```javascript
-// write a Template
-var template = y()
-	.h(1, '{{ title }}')
+
+var view = new y.View({
+	tagName: 'div',
+	data: {
+		title: 'Simpler is Better',
+		active: false,
+		user: '',
+		users: ["John", "Bill"],
+		articles: [{
+			title: 'Smaller is Better',
+			content: 'lorem ipsum'
+		}]
+	},
+	handlers: {
+		addUser: function(event) {
+			this.push('users', this.get('user'));
+		}
+	}
+});
+
+
+view.h(1, '{{ title }}')
 	.input('text', '{{ user }}')
 	.button('add user', y().setClass('your-class', 'active').click('addUser'))
 	.div(
@@ -191,27 +211,6 @@ var template = y()
 			.p('{{ content }}')
 		)
 	);
-
-// define a view
-var view = new y.View({
-	tagName: 'div',
-	template: template,
-	data: {
-		title: 'Simpler is Better',
-		active: false,
-		user: '',
-		users: ["John", "Bill"],
-		articles: [{
-			title: 'Smaller is Better',
-			content: 'lorem ipsum'
-		}]
-	},
-	handlers: {
-		addUser: function(event) {
-			this.push('users', this.get('user'));
-		}
-	}
-});
 
 document.body.appendChild(view.toElement());
 
