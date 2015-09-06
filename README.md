@@ -27,9 +27,9 @@ __Promise awareness__
 
 __More__
 - highly and easily extensible
-- close to standard. should work on IE9 with polyfills (classList, addEventListener, Promise). (maybe on IE8 - to test ;))
+- close to standard. should work on IE9 with polyfills (normally just classList, Promise). (maybe on IE8 with https://code.google.com/p/base2/ or more polyfills (setAttribute, addEventListener, ...) - to test ;))
 - UMD distribution, Common JS sources
-- clean code, easy to understand and to maintain or contribute ;).
+- clean and standard ES5 code, easy to understand and to maintain or contribute ;).
 
 __Plugins__
 Even if it's easily usable with other third party routers or ressources/model managers, it plays really nicely with those two extensions that you could find in the plugins folder from sources :
@@ -66,25 +66,26 @@ Even if it's easily usable with other third party routers or ressources/model ma
 		);
 
 	// define a context
-	var context = new y.Context({
-    	// data
-		title: 'Simpler is Better',
-		active: false,
-		user:'',
-		users: ["John", "Bill"],
-		articles: [{
-			title: 'Smaller is Better',
-			content:'lorem ipsum'
-		}]
-	},{
-    	// handlers
-    	addUser : function(event) {
-			this.push('users', this.get('user'));
+	var context = new y.Context({ 
+		data:{
+			title: 'Simpler is Better',
+			active: false,
+			user:'',
+			users: ["John", "Bill"],
+			articles: [{
+				title: 'Smaller is Better',
+				content:'lorem ipsum'
+			}]
+		}, 
+		handlers:{
+	    	addUser : function(event) {
+				this.push('users', this.get('user'));
+			}
 		}
-  	});
+	});
   
   	// create a virtual node (could be a document.createElement('div'))
-	var node = new y.Virtual('div');
+	var node = new y.Virtual({ tagName: 'div' });
 	// apply template on it and bind it to context
 	template.call(node, context);
 
@@ -131,22 +132,23 @@ Exactly the same example than above (but a really few detail... could you find i
 	<script type="text/javascript">
 
 		// define a context
-		var context = new yamvish.Context({
-	    	// data
-			title: 'Simpler is Better',
-			active: false,
-			user:'',
-			users: ["John", "Bill"],
-			articles: [{
-				title: 'Smaller is Better',
-				content:'lorem ipsum'
-			}]
-		},{
-	    	// handlers
-	    	addUser : function(event) {
-				this.push('users', this.get('user'));
+		var context = new y.Context({ 
+			data:{
+				title: 'Simpler is Better',
+				active: false,
+				user:'',
+				users: ["John", "Bill"],
+				articles: [{
+					title: 'Smaller is Better',
+					content:'lorem ipsum'
+				}]
+			}, 
+			handlers:{
+		    	addUser : function(event) {
+					this.push('users', this.get('user'));
+				}
 			}
-	  	});
+		});
 
 		yamvish.analyse(document.body, context);
 
@@ -160,6 +162,68 @@ Exactly the same example than above (but a really few detail... could you find i
 		.del('users.0');
 	</script>
 </body>
+```
+
+## View example
+
+Exactly the same example than above.
+
+```javascript
+// write a Template
+var template = y()
+	.h(1, '{{ title }}')
+	.input('text', '{{ user }}')
+	.button('add user', y().setClass('your-class', 'active').click('addUser'))
+	.div(
+		y().h(2, 'Users')
+		.ul(
+			y().each('users',
+				y().li(
+					y().a('#/user/{{ $this }}', '{{ $this }}')
+				)
+			)
+		)
+	)
+	.div(
+		y().h(2, 'Articles')
+		.each('articles',
+			y().h(3, '{{ title }}')
+			.p('{{ content }}')
+		)
+	);
+
+// define a view
+var view = new y.View({
+	tagName: 'div',
+	template: template,
+	data: {
+		title: 'Simpler is Better',
+		active: false,
+		user: '',
+		users: ["John", "Bill"],
+		articles: [{
+			title: 'Smaller is Better',
+			content: 'lorem ipsum'
+		}]
+	},
+	handlers: {
+		addUser: function(event) {
+			this.push('users', this.get('user'));
+		}
+	}
+});
+
+document.body.appendChild(view.toElement());
+
+// manipulate data from view. UI will update accordingly.
+view.set('active', true)
+	.set('users.1', 'William')
+	.push('users', 'Bob')
+	.push('articles', {
+		title: 'Faster is Better',
+		content: 'dolor sit amet...'
+	})
+	.del('users.0');
 ```
 
 ## API
@@ -197,6 +261,16 @@ View : It's just there to provide easy structuration. Absolutly optional.
 - y.View
 	- compilation of Template + Virtual + Context API
 	- there is nothing that you could do with View that you couldn't do with other classes. 
+	- View is bundled with minimal John Resig Simple Class Inheritance 
+
+### Plugins
+
+#### Dynamic-in-place router
+
+
+
+#### c3po bridge
+
 
 
 ### Misc
