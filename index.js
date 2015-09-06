@@ -232,7 +232,6 @@
 					return this.parent.set(path.slice(1), value);
 				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
 			}
-			this.data = this.data || {};
 			var old = setProp(this.data, path, value);
 			if (old !== value)
 				this.notify('set', path, value);
@@ -960,7 +959,12 @@
 	mergeProto(Context.prototype, y.View.prototype);
 	y.View.prototype.done = function(fn) {
 		fn.call(this, this);
+		return this;
 	};
+	delete y.View.prototype['catch'];
+	delete y.View.prototype.call;
+	delete y.View.prototype.id;
+
 	//________________________________________________ END VIEW
 
 	y.components = {};
