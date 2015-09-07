@@ -7,6 +7,10 @@
 
 		request and c3po
 
+		model validation + .disabled
+
+		route
+
 		views pool
 
 		.client( t1, t2, ...)
@@ -56,11 +60,15 @@
 	}
 
 	function emptyNode(node) {
-		if (isDOMElement(this)) {
-			while (this.firstChild)
-				this.removeChild(this.firstChild);
+		if (!node.childNodes || !node.childNodes.length)
+			return;
+		if (node.__yVirtual__) {
+			for (var i = 0, len = node.childNodes.length; i < len; ++i)
+				destroy(node.childNodes[i]);
+			node.childNodes = [];
 		} else
-			this.childNodes = [];
+			while (node.firstChild)
+				node.removeChild(node.firstChild);
 	}
 
 	function execHandler(node, fn, context) {
@@ -162,11 +170,14 @@
 		}
 		if (node.__yVirtual__) {
 			node.attributes = null;
+			node.classList.destroy();
 			node.classList = null;
 			node.listeners = null;
-			if (node.el && node.el.parentNode)
-				node.el.parentNode.removeChild(node.el);
-			node.el.parentNode = null;
+			if (node.el)
+				if (node.el.parentNode) {
+					node.el.parentNode.removeChild(node.el);
+					node.el.parentNode = null;
+				}
 			node.el = null;
 			if (node.binds)
 				for (var i = 0; i < node.binds.length; i++)
@@ -222,6 +233,10 @@
 			this.notifyAll('reset', null, this.map, data);
 			return this;
 		},
+		toggle: function(path) {
+			this.set(path, !this.get(path));
+			return this;
+		},
 		set: function(path, value) {
 			if (!path.forEach)
 				path = path.split('.');
@@ -230,7 +245,7 @@
 			if (path[0] === '$parent') {
 				if (this.parent)
 					return this.parent.set(path.slice(1), value);
-				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
+				throw new Error('yamvish.Context : there is no parent in current context. could not find : ' + path.join('.'));
 			}
 			var old = setProp(this.data, path, value);
 			if (old !== value)
@@ -243,17 +258,17 @@
 			if (path[0] == '$parent') {
 				if (this.parent)
 					return this.parent.push(path.slice(1), value);
-				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
+				throw new Error('yamvish.Context : there is no parent in current context. could not find : ' + path.join('.'));
 			}
 			var arr;
 			if (path[0] === '$this')
 				arr = this.data;
 			else
 				arr = getProp(this.data, path);
-			if (!arr) {
-				arr = [];
-				setProp(this.data, path, arr);
-			}
+			if (!arr)
+				throw new Error("yamvish.Context : Missing array at " + path.join(".") + " : couldn't push object.");
+			if (!arr.forEach)
+				throw new Error("yamvish.Context : Object is not array at " + path.join(".") + " : couldn't push object.");
 			arr.push(value);
 			this.notify('push', path, value, {
 				index: arr.length - 1
@@ -268,7 +283,7 @@
 			if (path[0] == '$parent') {
 				if (this.parent)
 					return this.parent.del(path.slice(1));
-				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
+				throw new Error('yamvish.Context : there is no parent in current context. could not find : ' + path.join('.'));
 			}
 			var key = path.pop(),
 				parent = path.length ? getProp(this.data, path) : this.data;
@@ -293,7 +308,7 @@
 			if (path[0] == '$parent') {
 				if (this.parent)
 					return this.parent.get(path.slice(1));
-				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
+				throw new Error('yamvish.Context : there is no parent in current context. could not find : ' + path.join('.'));
 			}
 			return getProp(this.data, path);
 		},
@@ -306,7 +321,7 @@
 			else if (path[0] === '$parent') {
 				if (this.parent)
 					return this.parent.subscribe(path.slice(1), fn, upstream);
-				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
+				throw new Error('yamvish.Context : there is no parent in current context. could not find : ' + path.join('.'));
 			} else
 				space = getProp(this.map, path);
 			if (upstream) {
@@ -336,7 +351,7 @@
 			else if (path[0] === '$parent') {
 				if (this.parent)
 					return this.parent.unsubscribe(path.slice(1), fn, upstream);
-				throw produceError('there is no parent in current context. could not find : ' + path.join('.'));
+				throw new Error('yamvish.Context : there is no parent in current context. could not find : ' + path.join('.'));
 			} else
 				space = getProp(this.map, path);
 			if (!space)
@@ -489,7 +504,7 @@
 		//__________________________________  REMOVE/DESTROY NODE
 		destroy: function() {
 			return this.done(function(context) {
-				destroy(this, context);
+				destroy(this);
 			});
 		},
 		remove: function() {
@@ -512,6 +527,27 @@
 					this.setAttribute(name, value);
 			});
 		},
+		removeAttr: function(name) {
+			return this.done(function(context) {
+				this.removeAttribute(name);
+			});
+		},
+		disabled: function(value) {
+			return this.done(function(context) {
+				var self = this;
+				var disable = function(type, path, newValue) {
+					if (newValue)
+						self.setAttribute('disabled');
+					else
+						self.removeAttribute('disabled');
+				};
+				if (typeof value === 'string') {
+					(this.binds = this.binds || []).push(context.subscribe(value, disable));
+					disable('set', null, context.get(value));
+				} else
+					disable('set', null, value);
+			});
+		},
 		id: function(id) {
 			return this.done(function() {
 				this.id = id;
@@ -523,9 +559,9 @@
 			return this.done(function(context) {
 				var self = this;
 				if (value.__interpolable__) {
-					y().on('input', function(event) {
+					this.addEventListener('input', function(event) {
 						context.set(value.directOutput, event.target.value);
-					}).call(this, context);
+					});
 					(this.binds = this.binds || []).push(value.subscribeTo(context, function(type, path, newValue) {
 						self.setAttribute('value', newValue);
 					}));
@@ -535,23 +571,20 @@
 			});
 		},
 		setClass: function(name, flag) {
-			var len = arguments.length;
 			return this.done(function(context) {
 				var self = this;
 				var applyClass = function(type, path, newValue) {
-					if (newValue) {
+					if (newValue)
 						self.classList.add(name);
-						if (self.el)
-							self.el.classList.add(name);
-					} else {
+					else
 						self.classList.remove(name);
-						if (self.el)
-							self.el.classList.remove(name);
-					}
 				};
-				if (flag) {
-					(this.binds = this.binds || []).push(context.subscribe(flag, applyClass));
-					applyClass('set', null, context.get(flag));
+				if (flag !== undefined) {
+					if (typeof flag === 'string') {
+						(this.binds = this.binds || []).push(context.subscribe(flag, applyClass));
+						applyClass('set', null, context.get(flag));
+					} else
+						applyClass('set', null, flag);
 				} else
 					applyClass('set', null, true);
 			});
@@ -561,10 +594,8 @@
 			return this.done(function(context) {
 				var h;
 				if (typeof handler === 'string') {
-					if (!context.handlers) {
-						// console.log('error no handler in context : ', context.handlers);
+					if (!context.handlers)
 						throw produceError('on(' + name + ') : no "' + handler + '" handlers define in current context', this);
-					}
 					h = context.handlers[handler];
 				} else
 					h = handler;
@@ -600,7 +631,6 @@
 					node.textContent = val;
 				} else
 					node = document.createTextNode(val);
-				emptyNode(this);
 				this.appendChild(node);
 			});
 		},
@@ -641,9 +671,13 @@
 			args.unshift('h' + level);
 			return this.tag.apply(this, args);
 		},
+		empty: function() {
+			return this.done(function(context) {
+				emptyNode(this);
+			});
+		},
 		//___________________________________________ ARRAY
 		each: function(path, templ) { // arguments : path, q1, q2, ...
-
 			return this.done(function(context) {
 				var template = templ || this._eachTemplate,
 					self = this;
@@ -655,7 +689,6 @@
 						throw produceError('no template for .each template handler', this);
 
 				var render = function(type, path, value, opt) {
-					// console.log('render : ', type, path, value, opt);
 					if (path.forEach)
 						path = path.join('.');
 					switch (type) {
@@ -663,12 +696,11 @@
 						case 'set':
 							emptyNode(self);
 							for (var i = 0, len = value.length; i < len; ++i)
-							/*data, handlers, parent, path*/
 								template.call(self, new Context({
-								data: value[i],
-								parent: context,
-								path: path + '.' + i
-							}));
+									data: value[i],
+									parent: context,
+									path: path + '.' + i
+								}));
 							break;
 						case 'removeAt':
 							destroy(self.childNodes[opt.index]);
@@ -737,15 +769,24 @@
 	/**
 	 * ClassList mockup for Virtual
 	 */
-	var ClassList = function() {
+	var ClassList = function(node) {
+		this.node = node;
 		this.classes = {};
 	};
 	ClassList.prototype = {
 		add: function(name) {
 			this.classes[name] = true;
+			if (this.node && this.node.el)
+				this.node.el.classList.add(name);
 		},
 		remove: function(name) {
 			delete this.classes[name];
+			if (this.node && this.node.el)
+				this.node.el.classList.remove(name);
+		},
+		destroy: function() {
+			this.node = null;
+			this.classes = null;
 		}
 	};
 	//_______________________________________________________ VIRTUAL
@@ -758,7 +799,7 @@
 		// mock
 		opt = opt || {};
 		this.tagName = opt.tagName;
-		this.classList = new ClassList();
+		this.classList = new ClassList(this);
 		this.__yVirtual__ = true;
 		if (opt.context)
 			this.context = opt.context;
@@ -768,7 +809,6 @@
 				throw produceError("no context could be found when initialising Virtual with template. aborting.", this);
 			else
 				opt.template.call(this, ctx);
-
 	};
 
 	Virtual.prototype  = {
@@ -777,6 +817,13 @@
 			(this.attributes = this.attributes || {})[name] = value;
 			if (this.el)
 				this.el.setAttribute(name, value);
+		},
+		removeAttribute: function(name, value) {
+			if (!this.attributes)
+				return;
+			delete this.attributes[name];
+			if (this.el)
+				this.el.removeAttribute(name, value);
 		},
 		addEventListener: function(type, listener) {
 			this.listeners = this.listeners || {};
@@ -797,8 +844,20 @@
 		},
 		appendChild: function(child) {
 			(this.childNodes = this.childNodes || []).push(child);
+			// child.parent = this;
 			if (this.el)
 				this.el.appendChild(child.toElement());
+			return child;
+		},
+		removeChild: function(child) {
+			for (var i = 0, len = this.childNodes.length; i < len; ++i)
+				if (this.childNodes[i] === child) {
+					this.childNodes.splice(i, 1);
+					break;
+				}
+				// child.parent = null;
+			if (child.el)
+				this.el.removeChild(child.el);
 			return child;
 		},
 		// _____________________________ OUTPUT
@@ -975,6 +1034,10 @@
 	y.View.prototype.done = function(fn) {
 		fn.call(this, this);
 		return this;
+	};
+	y.View.prototype.destroy = function() {
+		Context.prototype.destroy.call(this);
+		destroy(this);
 	};
 	delete y.View.prototype['catch'];
 	delete y.View.prototype.call;
