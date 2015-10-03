@@ -22,37 +22,33 @@ try {
 		//.set('amis', [{title:'MARCO'},{title:'CEDRIC'}])
 		.attr('some', '{{ test }}')
 		.setClass('zoo')
-		.div(
-			y().text('hello {{ test }}')
-			.click(function(context, event) {
-				context.push('items', Math.random());
-				//console.log("click : ", this, context, event);
-			})
+		.h(1,
+			'hello {{ test }}',
+			y().click('addItem')
 		)
+		.h(2, 'rooo')
 		.div(
 			y().setClass('haaaaaaaaaa', 'active')
+			.a('/', 'a link')
 			.ul(
 				y().setClass('bloupiiiiiiii')
-				.each('items', y().li(y().text('{{ $this }}')))
+				.each('items', y().li('{{ $this }}'))
 			)
 			.ul(
 				y().setClass('zzzzzzzzzzz')
 				.each('amis', y().li(
-					y()
-					.attr('fromParent', '{{ $parent.test }}')
-					.text('soooooooo {{ title }}')
+					y().attr('fromParent', '{{ $parent.test }}'),
+					'soooooooo {{ title }}'
 				))
 			)
-			.div(
-				y().text('{{ deep }} div')
-			)
-			.span(y().text('deep inner span'))
-		)
-		.tag('span', y().text('rooo'));
+			.div('{{ deep }} div')
+			.span('deep inner span')
+		);
 
 	document.body.innerHTML = '';
 
 	var context = new y.Context({
+		// data
 		test: 'world',
 		deep: 'foo',
 		active: false,
@@ -62,7 +58,14 @@ try {
 		}, {
 			title: 'CEDRIC'
 		}]
+	}, {
+		// event handlers
+		addItem: function(context, event) {
+			context.push('items', Math.random());
+		}
 	});
+
+	console.time("t");
 
 	for (var i = 0; i < 100; ++i) {
 		var o = new y.Virtual('div');
@@ -70,11 +73,9 @@ try {
 		document.body.appendChild(o.toElement());
 	}
 
-	console.time("t");
-
 	context.set('active', true)
 		.set('items.1', 'lollipop !')
-		.set('test', 'YAMOO !')
+		.set('test', 'HOOOO !')
 		.push('items', 'johnetta')
 		.push('amis', {
 			title: 'philippe'
@@ -126,3 +127,53 @@ try {
 	console.log("error :", e);
 }
 	*/
+
+
+
+/*
+
+function MyClass(arg){
+  this.arg = arg;
+}
+
+MyClass.prototype.foo = function(arg){
+  console.log("MyClass.foo : this.arg : ", this.arg, " - arg : ", arg);
+}
+
+function MyClass2(arg, arg2){
+  this.arg2 = arg2;
+}
+
+MyClass2.prototype.foo = function(arg){
+  this._super(arg+'heeee');
+  console.log("MyClass2.foo : this.arg2 : ", this.arg2, " - arg : ", arg);
+}
+
+var obj = {
+  foo: function(arg){
+    this._super(arg+'heeee');
+    console.log("obj.foo : this.arg : ", this.arg," - this.arg2 : ", this.arg2, " - arg : ", arg);
+  }
+};
+
+var Third = y.Class(MyClass, MyClass2, obj)
+
+
+var third = new Third("hello", "world");
+
+//third.foo("bar")
+
+
+
+var Fourth = Third.extend({
+  foo: function(arg){
+    this._super(arg+'heeee');
+    console.log("Fourth.foo : this.arg : ", this.arg," - this.arg2 : ", this.arg2, " - arg : ", arg);
+  }
+});
+
+var fourth = new Fourth('bloupi');
+fourth.foo('rooo');
+
+
+ */
