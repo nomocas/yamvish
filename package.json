@@ -28,12 +28,14 @@
   },
   "homepage": "https://github.com/nomocas/yamvish",
   "devDependencies": {
-    "gulp": "^3.9.0",
     "chai": "^2.2.0",
-    "gulp-uglifyjs": "^0.6.1",
-    "gulp-live-server": "0.0.14",
+    "elenpi": "^0.2.4",
+    "gulp": "^3.9.0",
+    "gulp-browserify": "^0.5.1",
     "gulp-jshint": "^1.10.0",
-    "jshint-stylish": "^1.0.1",
-    "gulp-rename": "^1.2.2"
+    "gulp-live-server": "0.0.14",
+    "gulp-rename": "^1.2.2",
+    "gulp-uglifyjs": "^0.6.1",
+    "jshint-stylish": "^1.0.1"
   }
 }
