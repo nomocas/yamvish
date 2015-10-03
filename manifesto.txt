@@ -1,0 +1,18 @@
+Real Isomorphism
+
+Promise and Time management
+
+More close to DOM
+
+String, virtual or DOM: you choose
+
+small atoms vs big mollecules
+	- small learnig curve - maintenable - lightweight
+
+Modern Browser First, polyfills
+for others
+
+Simple clear sources, well splitted
+I really dislike esoterism
+
+Weight
