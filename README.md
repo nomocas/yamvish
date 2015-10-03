@@ -5,7 +5,7 @@ Yet Another MVish isomorphic javascript library.
 Inspired from React, Ractive, jsblocks and Riot.
 
 - really fast both sides.
-- no need of jquery/zepto or cheerio/jsdom.
+- no need of jquery/zepto or cheerio/jsdom (but you could if needed).
 - really small (less than 4Ko minified/gzipped for the moment. should grow slightly)
 - dead simple. minimal learning curve.
 
@@ -85,12 +85,11 @@ Even if it's easily usable with other third party routers or ressources/model ma
 	});
   
   	// create a virtual node (could be a document.createElement('div'))
-	var node = new y.Virtual({ tagName: 'div' });
 	// apply template on it and bind it to context
-	template.call(node, context);
+	var container = template.toElement(context);
 
 	// (if virtual node : render to DOMElement then) append it somewhere
-	document.body.appendChild(node.toElement());
+	container.mount(document.body);
 	
 	// manipulate data from context. UI will update accordingly.
 	context.set('active', true)
@@ -109,7 +108,7 @@ Exactly the same example than above (but a really few detail... could you find i
 
 ```html 
 <body>
-	<div>
+	<div id="my-container">
 		<h1>{{ title }}</h1>
 		<input type="text" value="{{ user }}">
 		<button data-template="click(addUser).setClass('your-class', 'active')">add user</button>
@@ -136,8 +135,8 @@ Exactly the same example than above (but a really few detail... could you find i
 			data:{
 				title: 'Simpler is Better',
 				active: false,
-				user:'',
-				users: ["John", "Bill"],
+				user: '',
+				users: ['John', 'Bill'],
 				articles: [{
 					title: 'Smaller is Better',
 					content:'lorem ipsum'
@@ -150,7 +149,9 @@ Exactly the same example than above (but a really few detail... could you find i
 			}
 		});
 
-		yamvish.analyse(document.body, context);
+		var mountPoint = document.getElementByID('my-container'),
+			template = yamvish.dom.elementChildrenToTemplate(mountPoint),
+			container = template.toElement(context).mount(mountPoint);
 
 		context.set('active', true)
 		.set('users.1', 'William')
@@ -172,7 +173,6 @@ Exactly the same example than above.
 ```javascript
 
 var view = new y.View({
-	tagName: 'div',
 	data: {
 		title: 'Simpler is Better',
 		active: false,
@@ -212,7 +212,7 @@ view.h(1, '{{ title }}')
 		)
 	);
 
-document.body.appendChild(view.toElement());
+view.mount(document.body);
 
 // manipulate data from view. UI will update accordingly.
 view.set('active', true)
@@ -274,12 +274,72 @@ View : It's just there to provide easy structuration. Absolutly optional.
 
 ### Misc
 
-DOM Parsers :
-- y.elementToTemplate(DOMElement)
-- y.elementChildrenToTemplate(DOMElement)
+DOM To Template Parsers :
+- y.dom.elementToTemplate(DOMElement) : Template
+- y.dom.elementChildrenToTemplate(DOMElement) : Template
 
-String Parser :
-- y.stringToTemplate(string) (To do)
+HTML to Template Parser :
+```javascript
+var template = y.html.parse('<ul data-template="each(\'users\').click(\'hello\')" class="foo"><li>{{ $this }}</li></ul><p>{{ title }}</p>');
+
+var context = new y.Context({
+  data:{
+    title: 'Simpler is Better',
+    users: ["John", "Bill"]
+  }, 
+  handlers:{
+    hello : function(event) {
+      console.log("click hello");
+    }
+  }
+});
+
+var elem = document.createElement('section');
+ 
+template.call(elem, context);
+
+document.body.appendChild(elem);
+
+context.push('users', 'Biloud');
+```
+
+Template String parser : 
+```javascript
+var template = y.expression.parseTemplate("ul(each('users', li(text('{{ $this }}'))).click('hello'))");
+var context = new y.Context({
+  data:{
+    users: ["John", "Bill"]
+  }, 
+  handlers:{
+    hello : function(event) {
+      console.log("click hello");
+    }
+  }
+});
+
+var elem = document.createElement('section');
+ 
+template.call(elem, context);
+
+document.body.appendChild(elem);
+
+context.push('users', 'Biloud');
+```
+
+Expression String parser : 
+```javascript
+var expression = y.expression.parse(" users.1 | lower ");
+
+
+var elem = document.createElement('section');
+ 
+template.call(elem, context);
+
+document.body.appendChild(elem);
+
+context.push('users', 'Biloud');
+```
+
 
 Component Registration
 - y.addComponent(name, template || view);
@@ -290,6 +350,20 @@ Interpolable string manager : (You should never use it directly)
 	- subscribeTo(context, path, callback)
 
 
+### More Example
+
+
+Modify context data by hand then notify.
+```javascript
+ 	// define a context
+	var context = new y.Context({ 
+		data:{
+			users: ['John', 'Bill']
+		}
+	});
+	context.data.users.push("jean");
+  	context.notify('push', 'users', 'Jean', view.data.users.length -1);
+```
 
 
 ## Licence
