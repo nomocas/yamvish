@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>yamvish mocha tests</title>
+    <link rel="stylesheet" href="./test/mocha.css" />
+    <style>
+    #fixture {
+        position: absolute;
+        top: -9999;
+        left: -9999;
+    }
+    
+    ;
+    </style>
+    <script type="text/javascript" src="./dist/yamvish.js"></script>
+    <script src="./test/chai.js"></script>
+    <script src="./test/mocha.js"></script>
+    <script>
+    mocha.setup('bdd');
+    </script>
+    <script src="./test/test.js"></script>
+    <script>
+    window.onload = function() {
+        mocha.run()
+    };
+    </script>
+</head>
+
+<body>
+    <h2 style="margin-left:30px;"><a href="https://github.com/nomocas/yamvish">yamvish</a> tests</h2>
+    <button onclick="runToElement();">run</button>
+    <button onclick="unmountElements();">unmount</button>
+    <button onclick="mountElements();">mount</button>
+    <button onclick="cleanElements();">clean</button>
+    <button onclick="runToVirtual();">virtual</button>
+    <button onclick="runToString();">string</button>
+    <button onclick="runTemplateToString();">templ.string</button>
+    <button onclick="runToVirtualToString();">virtual + string</button>
+    <button onclick="toggleActive();">active</button>
+    <button onclick="followedEach();">followed each</button>
+    <div id="mocha"></div>
+    <script type="text/javascript">
+    var numNodes = 200;
+
+    function range(size) {
+        var output = [];
+        for (var i = 0; i < size; ++i)
+            output.push(Math.random());
+        return output;
+    }
+
+
+
+    var context = new y.Context({
+        data: {
+            title: 'Simpler is Better',
+            users: ["John", "Bill"],
+            range: range(numNodes)
+        },
+        handlers: {
+            hello: function(event) {
+                console.log("click hellossss");
+            }
+        }
+    });
+
+
+    function toggleActive() {
+        context.toggle('active');
+    }
+
+    var templ = y()
+        .on('mounted', function() {
+            console.log('mounted. from template');
+        })
+        .div(
+            y()
+            .click('hello')
+            .h(1, '{{ title }}')
+            .ul(
+                y().each('users',
+                    y().li('{{ $this }}')
+                )
+            )
+        )
+        .div(
+            y()
+            .attr('hello', 'world')
+            .setClass('active')
+            .ul(
+                y().visible('active').each('range',
+                    y().li('{{ $this }}', y().click(function(evt) {
+                        console.log('hello item : ', evt.target.textContent);
+                    }))
+                )
+            )
+            .div(
+                y()
+                .click('hello')
+                .h(1, '{{ title }}')
+            )
+        )
+        .p('{{ title }} hello {{ title }}');
+
+    var virtualContainer, container;
+
+    function runToElement() {
+        try {
+            context.data.range = range(numNodes);
+            console.time("yamvish Template.toElement.mount");
+            var time9 = new Date().getTime();
+            container = templ.toElement(context).mount("#mocha");
+            time9 = new Date().getTime() - time9;
+            console.timeEnd("yamvish Template.toElement.mount");
+            context.set('range.0', 'Template.toElement.mount : ' + time9);
+            container.addEventListener('mounted', function(evt) {
+                console.log("mounted : ", evt);
+            });
+
+            container.addEventListener('unmounted', function(evt) {
+                console.log("unmounted : ", evt);
+            });
+
+            container.addEventListener('destroy', function(evt) {
+                console.log("destroy : ", evt);
+            });
+        } catch (e) {
+            console.log('error : ', e, e.stack);
+        }
+    }
+
+    function runToVirtual() {
+        try {
+            console.time("yamvish Template.toVirtual");
+            var time9 = new Date().getTime();
+            virtualContainer = templ.toElement(context, y.Virtual);
+            time9 = new Date().getTime() - time9;
+            console.timeEnd("yamvish Template.toVirtual");
+            context.set('range.0', 'Template.toVirtual : ' + time9)
+        } catch (e) {
+            console.log('error : ', e, e.stack);
+        }
+    }
+
+    function runTemplateToString() {
+        try {
+            console.time("yamvish Template.toString");
+            var time9 = new Date().getTime();
+            var r = templ.toString(context);
+            time9 = new Date().getTime() - time9;
+            console.timeEnd("yamvish Template.toString");
+            context.set('range.0', 'Template.toString : ' + time9);
+            console.log('template.toString : ', r);
+        } catch (e) {
+            console.log('error : ', e, e.stack);
+        }
+    }
+
+    function runToString() {
+        try {
+            console.time("yamvish container.toString");
+            var time9 = new Date().getTime();
+            var r = virtualContainer.toString();
+            time9 = new Date().getTime() - time9;
+            console.timeEnd("yamvish container.toString");
+            context.set('range.0', 'virtualContainer.toString : ' + time9)
+            console.log('virtual to string : ', r);
+        } catch (e) {
+            console.log('error : ', e, e.stack);
+        }
+    }
+
+    function runToVirtualToString() {
+        try {
+            console.time("yamvish Template.toVirtual.toString");
+            var time9 = new Date().getTime();
+            var r = templ.toElement(context, y.Virtual).toString();
+            time9 = new Date().getTime() - time9;
+            console.timeEnd("yamvish Template.toVirtual.toString");
+            context.set('range.0', 'Template.toVirtual.toString : ' + time9)
+            console.log('to virtual to string : ', r);
+        } catch (e) {
+            console.log('error : ', e, e.stack);
+        }
+    }
+
+    function mountElements() {
+        try {
+            console.time("yamvish Node.mount");
+            var time9 = new Date().getTime();
+            container.mount('#mocha');
+            time9 = new Date().getTime() - time9;
+            console.timeEnd("yamvish Node.mount");
+            context.set('range.0', 'Node.mount : ' + time9)
+        } catch (e) {
+            console.log('error : ', e, e.stack);
+        }
+    }
+
+    function unmountElements() {
+        try {
+            console.time("yamvish Node.unmount");
+            container.unmount();
+            console.timeEnd("yamvish Node.unmount");
+        } catch (e) {
+            console.log('error : ', e, e.stack);
+        }
+    }
+
+    function cleanElements() {
+        try {
+            console.time("yamvish Node.destroy");
+            container.destroy();
+            console.timeEnd("yamvish Node.destroy");
+        } catch (e) {
+            console.log('error : ', e, e.stack);
+        }
+    }
+
+
+    function followedEach() {
+        console.time("test");
+        var time9 = new Date().getTime();
+        var view = new y.View()
+            // context
+            .set('title', 'Write once. Run everywhere.')
+            .set('users', ['Bill', 'Baroud'])
+            .set('colors', [{
+                color: 'yellow'
+            }, {
+                color: 'pink'
+            }])
+            .set('selectedColor', 'brown')
+            .rqlView('colors', 'colorsView', 'color={{ selectedColor }}')
+            // template
+            .h(1, '{{ title }}')
+            .input('text', '{{ users.1 }}')
+            .input('text', '{{ selectedColor }}')
+            .each('users', y().p('{{ $this }}'))
+            .ul(
+                y().each('colorsView',
+                    y().li('{{ color }} colors')
+                )
+            )
+            .p('{{ title }}')
+            // container
+            .mount('#mocha')
+            // context
+            .push('users', 'Biloud')
+            .push('users', 'Johnny')
+            .del('users.1')
+            .set('users.1', 'Rolette')
+            .push('colors', {
+                color: 'black'
+            })
+            .push('colors', {
+                color: 'brown'
+            })
+            .del('colors.1');
+        time9 = new Date().getTime() - time9;
+
+        console.timeEnd("test");
+        view.set('users.0', 'followed each : ' + time9)
+    }
+    </script>
+</body>
+
+</html>
