@@ -55,6 +55,7 @@ y.PureNode = require('./lib/pure-node');
 y.Virtual = require('./lib/virtual');
 y.Container = require('./lib/container');
 y.View = require('./lib/view');
+y.c3po = require('./plugins/c3po-bridge');
 y.rql = require('./plugins/rql-array');
 require('./plugins/rql');
 
@@ -63,10 +64,10 @@ y.interpolable = interpolable.interpolable;
 y.Interpolable = interpolable.Interpolable;
 
 // parsers
-/*y.dom = require('./lib/parsers/dom-to-template');
+y.dom = require('./lib/parsers/dom-to-template');
 y.html = require('./lib/parsers/html-to-template');
 y.expression = require('./lib/parsers/expression');
-y.elenpi = require('elenpi');*/
+y.elenpi = require('elenpi');
 
 //________________________________________________ END VIEW
 
