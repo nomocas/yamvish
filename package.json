@@ -39,6 +39,7 @@
     "jshint-stylish": "^1.0.1"
   },
   "dependencies": {
+    "c3po": "^1.0.1",
     "rql": ">=0.3.1"
   }
 }
