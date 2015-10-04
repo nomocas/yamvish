@@ -40,6 +40,7 @@
     <button onclick="runToVirtualToString();">virtual + string</button>
     <button onclick="toggleActive();">active</button>
     <button onclick="followedEach();">followed each</button>
+    <button onclick="load();">load</button>
     <div id="mocha"></div>
     <script type="text/javascript">
     var numNodes = 200;
@@ -231,14 +232,18 @@
                 color: 'yellow'
             }, {
                 color: 'pink'
+            }, {
+                color: 'piretre'
             }])
-            .set('selectedColor', 'brown')
-            .rqlView('colors', 'colorsView', 'color={{ selectedColor }}')
+            .set('selectedColor', '')
+            .rqlView('colors', 'colorsView', 'color=match={{ selectedColor }}&sort(-color)')
             // template
             .h(1, '{{ title }}')
             .input('text', '{{ users.1 }}')
             .input('text', '{{ selectedColor }}')
-            .each('users', y().p('{{ $this }}'))
+            .each('users',
+                y().p('{{ $this }}')
+            )
             .ul(
                 y().each('colorsView',
                     y().li('{{ color }} colors')
@@ -247,22 +252,69 @@
             .p('{{ title }}')
             // container
             .mount('#mocha')
-            // context
-            .push('users', 'Biloud')
+            .done(function(context, factory, promises) {
+                promises.push(new Promise(function(resolve, reject) {
+                    setTimeout(function() {
+                        context.set('title', 'yesss')
+                        resolve(true);
+                    }, 1000);
+                }));
+            });
+
+
+        view.then(function(s) {
+            console.log("view full rendered");
+        });
+
+        // context
+        view.push('users', 'Biloud')
             .push('users', 'Johnny')
             .del('users.1')
             .set('users.1', 'Rolette')
             .push('colors', {
-                color: 'black'
-            })
-            .push('colors', {
                 color: 'brown'
             })
-            .del('colors.1');
+            .push('colors', {
+                color: 'black'
+            });
+        // .del('colors.1');
         time9 = new Date().getTime() - time9;
 
         console.timeEnd("test");
         view.set('users.0', 'followed each : ' + time9)
+    }
+
+    function load() {
+        y.c3po.protocols.text = {
+            get: function(req, opt) {
+                // async simulation
+                return new Promise(function(resolve) {
+                    setTimeout(function() {
+                        resolve('hello async ' + req);
+                    }, 1000);
+                });
+            }
+        };
+        try {
+            console.time("load");
+            window.view = new y.View()
+                .set('id', 12)
+                .load('title', 'text::{{ id }}',
+                    y().set('loading', true),
+                    y().set('loading', false)
+                )
+                .div('{{ title }}', y().visible('!loading'))
+                .p('loading...', y().visible('loading'))
+                .mount('#mocha');
+
+
+            view.then(function(s) {
+                console.log("load end : ", s);
+            });
+            console.timeEnd("load");
+        } catch (e) {
+            console.log("error : ", e, e.stack);
+        }
     }
     </script>
 </body>
