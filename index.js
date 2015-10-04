@@ -5,13 +5,15 @@
 				still data-*
 			from String 				OK
 
-		if('!initialised', ..., ...)
+		 .disabled
+
+		if('!initialised', ..., ...) 		// almost done
 
 		integrate filters and expressions
 
-		request and c3po
+		request and c3po-bridge 			OK
 
-		model validation + .disabled
+		model validation  
 
 		route
 
@@ -36,9 +38,74 @@
 
 		y.applyToDOM(node | selector, template)		==> apply template on dom element (select it if selector)
 
-		eventListeners : click(addUser(user)) : should retrieve user before feeding addUser 
+		eventListeners : click(addUser(user)) : should retrieve user before feeding addUser
 
-*/
+
+
+
+	Parser : 
+		split html texts in static/interpolable atoms
+		interpret with new Function() to allow complexe expression
+
+	Should :
+
+		rename _yamvish_binds in _binds 					OK
+		rename all privates vars with _*
+
+		for each template handler : 
+		add args in queue (through done) and place inner functions outside : no more closure
+
+	Context with * 					OK
+
+		could register to path.*
+		and receive the * as key  +  value
+		then items[key].reset(value)
+
+
+	Eacher : 
+
+		hybrid structure ?												OK
+			virtual that could contains real DOM node in childNodes
+
+		associate to real DOMNode that execute 'each' the virtual node that hold children  		OK
+
+		==> maybe introduce special token/tag/comment for each/filter/sort 
+			=> it resolves the html/js template equivalence
+		e.g. 
+
+			<div ...>
+				<h1>...</h1>
+				<each:users filter="name" sort="lastname">
+						
+
+				</each>
+				...
+				<each:events>
+					
+
+				</each>
+				...
+				<todo-list:todoId  />
+			</div>
+
+
+
+	ES5/6
+
+
+		arrows everywhere
+
+		arguments manip
+
+		simple interpolation
+
+		classes
+
+		...
+
+
+ */
+
 
 //____________________________________________________ YAMVISH
 
