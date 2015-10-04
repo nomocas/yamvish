@@ -18,6 +18,8 @@
 
 		views pool
 
+		collection filtering view 				OK
+
 		.client( t1, t2, ...)
 		.server(t1, t2, ...)
 
@@ -35,9 +37,74 @@
 
 		y.applyToDOM(node | selector, template)		==> apply template on dom element (select it if selector)
 
-		eventListeners : click(addUser(user)) : should retrieve user before feeding addUser 
+		eventListeners : click(addUser(user)) : should retrieve user before feeding addUser
 
-*/
+
+
+
+	Parser : 
+		split html texts in static/interpolable atoms
+		interpret with new Function() to allow complexe expression
+
+	Should :
+
+		rename _yamvish_binds in _binds 					OK
+		rename all privates vars with _*
+
+		for each template handler : 
+		add args in queue (through done) and place inner functions outside : no more closure
+
+	Context with * 					OK
+
+		could register to path.*
+		and receive the * as key  +  value
+		then items[key].reset(value)
+
+
+	Eacher : 
+
+		hybrid structure ?												OK
+			virtual that could contains real DOM node in childNodes
+
+		associate to real DOMNode that execute 'each' the virtual node that hold children  		OK
+
+		==> maybe introduce special token/tag/comment for each/filter/sort 
+			=> it resolves the html/js template equivalence
+		e.g. 
+
+			<div ...>
+				<h1>...</h1>
+				<each:users filter="name" sort="lastname">
+						
+
+				</each>
+				...
+				<each:events>
+					
+
+				</each>
+				...
+				<todo-list:todoId  />
+			</div>
+
+
+
+	ES5/6
+
+
+		arrows everywhere
+
+		arguments manip
+
+		simple interpolation
+
+		classes
+
+		...
+
+
+ */
+
 
 //____________________________________________________ YAMVISH
 
@@ -54,6 +121,7 @@ y.PureNode = require('./lib/pure-node');
 y.Virtual = require('./lib/virtual');
 y.Container = require('./lib/container');
 y.View = require('./lib/view');
+y.c3po = require('./plugins/c3po-bridge');
 y.rql = require('./plugins/rql-array');
 require('./plugins/rql');
 
@@ -62,10 +130,10 @@ y.interpolable = interpolable.interpolable;
 y.Interpolable = interpolable.Interpolable;
 
 // parsers
-/*y.dom = require('./lib/parsers/dom-to-template');
+y.dom = require('./lib/parsers/dom-to-template');
 y.html = require('./lib/parsers/html-to-template');
 y.expression = require('./lib/parsers/expression');
-y.elenpi = require('elenpi');*/
+y.elenpi = require('elenpi');
 
 //________________________________________________ END VIEW
 
@@ -77,7 +145,7 @@ y.addComponent = function(name, template /* or view instance */ ) {
 
 module.exports = y;
 
-},{"./lib/container":2,"./lib/context":3,"./lib/interpolable":5,"./lib/pure-node":7,"./lib/template":8,"./lib/utils":9,"./lib/view":10,"./lib/virtual":11,"./plugins/rql":13,"./plugins/rql-array":12}],2:[function(require,module,exports){
+},{"./lib/container":2,"./lib/context":3,"./lib/interpolable":6,"./lib/parsers/dom-to-template":7,"./lib/parsers/expression":8,"./lib/parsers/html-to-template":10,"./lib/pure-node":11,"./lib/template":12,"./lib/utils":13,"./lib/view":14,"./lib/virtual":15,"./plugins/c3po-bridge":18,"./plugins/rql":20,"./plugins/rql-array":19,"elenpi":17}],2:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -92,6 +160,7 @@ function Container(opt /*tagName, context*/ ) {
 	this.__yContainer__ = true;
 	this.parent = opt.parent;
 	this.childNodes = [];
+	this.promises = [];
 	PureNode.call(this, opt);
 };
 
@@ -143,6 +212,26 @@ Container.prototype  = {
 		this.context = undefined;
 		this.mountPoint = undefined;
 		this.mountSelector = undefined;
+	},
+	then: function(success, error) {
+		if (this.promises.length) {
+			this.promise = Promise.all(this.promises);
+			this.promises = [];
+			return this.promise.then(success, error);
+		}
+		if (this.promise)
+			return this.promise.then(success, error);
+		return Promise.resolve([]).then(success, error);
+	},
+	'catch': function(error) {
+		if (this.promises.length) {
+			this.promise = Promise.all(this.promises);
+			this.promises = [];
+			return this.promise['catch'](error);
+		}
+		if (this.promise)
+			return this.promise['catch'](error);
+		return Promise.resolve([]);
 	}
 };
 
@@ -166,7 +255,7 @@ Container.prototype.removeChild = function(child) {
 
 module.exports = Container;
 
-},{"./emitter":4,"./pure-node":7,"./utils":9}],3:[function(require,module,exports){
+},{"./emitter":4,"./pure-node":11,"./utils":13}],3:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils');
@@ -270,14 +359,15 @@ Context.prototype = {
 	get: function(path) {
 		if (!path.forEach)
 			path = path.split('.');
+		var res;
 		if (path[0] === '$this')
 			return this.data;
-		if (path[0] == '$parent') {
-			if (this.parent)
-				return this.parent.get(path.slice(1));
-			throw new Error('yamvish.Context : there is no parent in current context. could not find : ' + path.join('.'));
-		}
-		return utils.getProp(this.data, path);
+		else if (path[0] == '$parent') {
+			if (!this.parent)
+				throw new Error('yamvish.Context : there is no parent in current context. could not find : ' + path.join('.'));
+			return this.parent.get(path.slice(1));
+		} else
+			return utils.getProp(this.data, path);
 	},
 	subscribe: function(path, fn, upstream) {
 		if (!path.forEach)
@@ -369,13 +459,20 @@ Context.prototype = {
 		if (space)
 			this.notifyAll(type, path, space, value, index);
 		return this;
+	},
+	setAsync: function(path, promise) {
+		var self = this;
+		return promise.then(function(s) {
+			self.set(path, s);
+		}, function(e) {
+			console.error('error while Context.setAsync : ', e);
+			throw e;
+		});
 	}
 
 	/*
-		// TODO
-		rqlView: function(path, expr, viewName) {
-			// filter array and produce array.view
-		},
+		// TODO as c3po bridge plugin
+		
 		ressource: function(resourceMap, done, fail, $this) {
 			
 				in template :
@@ -398,7 +495,7 @@ function notifyUpstreams(space, type, path, value, index) {
 
 module.exports = Context;
 
-},{"./utils":9}],4:[function(require,module,exports){
+},{"./utils":13}],4:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 /**
@@ -430,6 +527,75 @@ Emitter.prototype = {
 module.exports = Emitter;
 
 },{}],5:[function(require,module,exports){
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
+
+/**
+ * addslashes
+capitalize
+date
+default
+escape
+first
+groupBy
+join
+json
+last
+lower
+raw
+replace
+reverse
+safe
+sort
+striptags
+title
+uniq
+upper
+url_encode
+url_decode
+
+Incode Filter Usage
+y.filter('my value').lower().date('yy/mm/dd');
+ */
+
+var utils = require('./utils');
+
+//_______________________________________________________ TEMPLATE
+
+function Filter(f) {
+	this._queue = f ? f._queue.slice() : [];
+};
+
+Filter.prototype = {
+	//_____________________________ APPLY filter ON something
+	call: function(callee, context) {
+		return utils.execFilterQueue(callee, this._queue, context);
+	},
+	//_____________________________ BASE Filter handler (every template handler is from one of those two types (done or catch))
+	done: function(callback) {
+		this._queue.push({
+			type: 'done',
+			fn: callback
+		});
+		return this;
+	},
+	lower: function() {
+		return this.done(function(input) {
+			return input.toLowerCase();
+		});
+	},
+	date: function(format) {
+		// use dateFormat from http://blog.stevenlevithan.com/archives/date-time-format
+		// ensure it is loaded before use
+		return this.done(function(input) {
+			return new Date(input).format(format);
+		});
+	}
+};
+
+
+module.exports = Filter;
+
+},{"./utils":13}],6:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 // var expression = require('./parsers/expression');
@@ -495,7 +661,7 @@ module.exports = {
 	Interpolable: Interpolable
 };
 
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 //_______________________________________________________ DOM PARSING
@@ -555,7 +721,327 @@ module.exports = {
 	elementToTemplate: elementToTemplate
 };
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
+
+var elenpi = require('elenpi/index'),
+	r = elenpi.r,
+	Parser = elenpi.Parser,
+	Filter = require('../filter');
+
+var templateCache = {};
+var filterCache = {};
+
+var rules = {
+	doublestring: r().regExp(/^"([^"]*)"/, false, function(descriptor, cap) {
+		descriptor.arguments.push(cap[1]);
+	}),
+	singlestring: r().regExp(/^'([^']*)'/, false, function(descriptor, cap) {
+		descriptor.arguments.push(cap[1]);
+	}),
+	'float': r().regExp(/^[0-9]*\.[0-9]+/, false, function(descriptor, cap) {
+		descriptor.arguments.push(parseFloat(cap[0], 10));
+	}),
+	integer: r().regExp(/^[0-9]+/, false, function(descriptor, cap) {
+		descriptor.arguments.push(parseInt(cap[0], 10));
+	}),
+	bool: r().regExp(/^(true|false)/, false, function(descriptor, cap) {
+		descriptor.arguments.push((cap[1] === 'true') ? true : false);
+	}),
+
+	args: r().zeroOrOne(null,
+		r()
+		.regExp(/^\s*\(\s*/)
+		.done(function(string, descriptor) {
+			descriptor.arguments = [];
+			return string;
+		})
+		.zeroOrMore(null,
+			r().oneOf(['integer', 'bool', 'singlestring', 'doublestring']),
+			r().regExp(/^\s*,\s*/)
+		)
+		.regExp(/^\s*\)/)
+	),
+
+	//_____________________________________
+	// {{ my.var | filter().filter2(...) }}
+	// {{ my.func(arg, ...) }}
+	expression: r()
+		.done(function(string, descriptor) {
+			descriptor.keys = [];
+			return string;
+		})
+		.space()
+		.oneOrMore(null,
+			r().regExp(/^[\w-_]+/, false, function(descriptor, cap) {
+				descriptor.keys.push(cap[0]);
+			}),
+			r().regExp(/^\s*\.\s*/)
+		)
+		.rule('args')
+		.zeroOrOne(null, r().regExp(/^\s*\|\s*/).rule('filters'))
+		.space(),
+
+	//_____________________________________
+	// filter().filter2(...).filter3.filter4(...)
+	filters: r()
+		.space()
+		.zeroOrMore('filters',
+			r().rule('filter'),
+			r().regExp(/^\s*\.\s*/)
+		)
+		.done(function(string, descriptor) {
+			if (descriptor.filters)
+				descriptor.filters = compile(descriptor.filters, Filter);
+			return string;
+		}),
+
+	filter: r()
+		.regExp(/^[\w-_]+/, false, 'method') // method name
+		.rule('args'),
+
+	//_____________________________________
+	// click('addUser').div(p().h(1,'hello'))
+	templates: r()
+		.space()
+		.zeroOrMore('calls',
+			r().rule('template'),
+			r().regExp(/^\s*\.\s*/)
+		)
+		.done(function(string, descriptor) {
+			var t;
+			if (descriptor.calls)
+				t = compile(descriptor.calls, this.Template);
+			if (t && descriptor.arguments) {
+				descriptor.arguments.push(t);
+				delete descriptor.calls;
+			} else
+				descriptor.calls = t;
+			return string;
+		}),
+
+	template: r()
+		.regExp(/^[\w-_]+/, false, function(descriptor, cap) {
+			descriptor.method = cap[0];
+			descriptor.arguments = [];
+		})
+		.zeroOrOne(null,
+			r()
+			.regExp(/^\s*\(\s*/)
+			.zeroOrMore(null,
+				r().oneOf(['integer', 'bool', 'singlestring', 'doublestring', 'templates']),
+				r().regExp(/^\s*,\s*/)
+			)
+			.regExp(/^\s*\)/)
+		)
+};
+
+var parser = new Parser(rules, 'expression');
+
+function compile(calls, Chainable) {
+	var ch = new Chainable();
+	for (var i = 0, len = calls.length; i < len; ++i) {
+		var call = calls[i];
+		ch[call.method].apply(ch, call.arguments);
+	}
+	return ch;
+}
+
+parser.parseTemplate = function(string) {
+	if (templateCache[string] !== undefined)
+		return templateCache[string].calls;
+	var result = templateCache[string] = parser.parse(string, 'templates');
+	if (result === false)
+		return false;
+	return result.calls;
+};
+
+parser.parseFilter = function(string) {
+	if (filterCache[string] !== undefined)
+		return filterCache[string].filters;
+	var result = filterCache[string] = parser.parse(string, 'filters');
+	if (result === false)
+		return false;
+	return result.filters;
+};
+
+module.exports = parser;
+
+/*
+console.log(y.expression.parse("user.name(12, 'hello') | date('dd-mm-yy').lower", 'expression'));
+console.log(y.expression.parse("user.name(12, 'hello') | date.lower", 'expression'));
+console.log(y.expression.parse("user.name | date('dd-mm-yy').lower"));
+console.log(y.expression.parse("user.name(12, 'hello') | lower", 'expression'));
+console.log(y.expression.parse("date('dd-mm-yy').lower", 'filters'));
+console.log(y.html.parse('<div class="bloupi"></div>'));
+console.log(y.expression.parseTemplate("click ( '12', 14, true, p(2, 4, span( false).p())). div(12345)"));
+ */
+
+},{"../filter":5,"elenpi/index":17}],9:[function(require,module,exports){
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
+
+/**
+ * Common HTML5 elenpi rules use din both html-to-template and html-to-virtual parsers
+ * @type {[type]}
+ */
+var r = require('elenpi').r; // elenpi new rule shortcut
+
+var rules = {
+	// html5 unstrict self closing tags : 
+	openTags: /(br|input|img|area|base|col|command|embed|hr|img|input|keygen|link|meta|param|source|track|wbr)/,
+
+	document: r()
+		.zeroOrMore(null, r().space().rule('comment'))
+		.regExp(/^\s*<!DOCTYPE[^>]*>\s*/i, true)
+		.rule('children')
+		.space(),
+
+	comment: r().regExp(/^<!--(?:.|\n|\r)*?(?=-->)-->/),
+
+	tagEnd: r()
+		// closing tag
+		.regExp(/^\s*<\/([\w-_]+)\s*>/, false, function(descriptor, cap) {
+			if (descriptor.tagName !== cap[1].toLowerCase())
+				throw new Error('tag badly closed : ' + cap[1] + ' - (at opening : ' + descriptor.tagName + ')');
+		}),
+
+	innerScript: r()
+		.done(function(string, descriptor) {
+			var index = string.indexOf('</script>');
+			if (index == -1)
+				throw new Error('script tag badly closed.');
+			if (index)
+				descriptor.scriptContent = string.substring(0, index);
+			return string.substring(index + 9);
+		})
+};
+
+module.exports = rules;
+
+},{"elenpi":17}],10:[function(require,module,exports){
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
+
+var elenpi = require('elenpi'),
+	r = elenpi.r,
+	Parser = elenpi.Parser,
+	utils = require('../utils.js'),
+	Template = require('../template.js'),
+	expression = require('./expression'),
+	htmlRules = require('./html-common-rules');
+
+var rules = {
+	// tag children
+	children: r()
+		.zeroOrMore(null,
+			r().oneOf([
+				r().space().rule('comment').skip(),
+				r().space().rule('tag'),
+				r().rule('text')
+			])
+		),
+
+	text: r().regExp(/^[^<]+/, false, function(descriptor, cap) {
+		descriptor.text(cap[0]);
+	}),
+
+	tag: r()
+		.regExp(/^<([\w-_]+)\s*/, false, function(descriptor, cap) {
+			descriptor.tagName = cap[1].toLowerCase();
+		})
+		.done(function(string, descriptor) {
+			descriptor._attributesTemplate = new Template();
+			return this.exec(string, descriptor._attributesTemplate, this.rules.attributes);
+		})
+		.oneOf([
+			r().char('>')
+			.done(function(string, descriptor) {
+				// check html5 unstrict self-closing tags
+				if (this.rules.openTags.test(descriptor.tagName))
+					return string; // no children
+
+				if (descriptor.tagName === 'script') // get script content
+					return this.exec(string, descriptor, this.rules.innerScript);
+
+				// get inner tag content
+				descriptor._eachTemplate = new Template();
+				var ok = this.exec(string, descriptor._eachTemplate, this.rules.children); // to _eachTemplate
+				if (ok === false)
+					return false;
+				// close tag
+				return this.exec(ok, descriptor, this.rules.tagEnd);
+			}),
+			// strict self closed tag
+			r().regExp(/^\/>/)
+		])
+		.done(function(string, descriptor) {
+			var eachTemplate = descriptor._eachTemplate,
+				attributesTemplate = descriptor._attributesTemplate;
+			if (eachTemplate)
+				if (!attributesTemplate._hasEach)
+					attributesTemplate._queue = attributesTemplate._queue.concat(eachTemplate._queue);
+				else
+					attributesTemplate._queue.unshift({
+						// small hack to define _eachTemplate in virtual or DOM element before 'each' execution
+						type: 'done',
+						fn: function(string) {
+							this._eachTemplate = eachTemplate;
+							return string;
+						}
+					});
+			descriptor.tag(descriptor.tagName, attributesTemplate);
+			delete descriptor._attributesTemplate;
+			delete descriptor._eachTemplate;
+			delete descriptor.tagName;
+			return string;
+		}),
+
+	attributes: r().zeroOrMore(null,
+		r().regExp(/^([\w-_]+)\s*(?:=(?:"([^"]*)"|([\w-_]+)))?\s*/, false, function(descriptor, cap) {
+			var attrName = cap[1],
+				value = (cap[2] !== undefined) ? cap[2] : ((cap[3] !== undefined) ? cap[3] : '');
+
+			switch (attrName) {
+				case 'class':
+					if (!value)
+						break;
+					value.split(/\s+/).forEach(function(cl) {
+						descriptor.setClass(cl);
+					});
+					break;
+				case 'data-template':
+					if (!value)
+						break;
+					var template = expression.parseTemplate(value);
+					if (template !== false) {
+						descriptor._queue = descriptor._queue.concat(template._queue);
+						descriptor._hasEach = descriptor._hasEach || template._hasEach;
+					} else
+						throw new Error('data-template attribute parsing failed : ' + value);
+					break;
+				case 'id':
+					if (!value)
+						break;
+					descriptor.id(value);
+					break;
+				default:
+					descriptor.attr(attrName, value);
+					break;
+			}
+		})
+	)
+};
+
+rules = utils.merge(htmlRules, rules);
+
+var parser = new Parser(rules, 'children');
+
+parser.createDescriptor = function() {
+	return new Template();
+};
+
+module.exports = parser;
+
+},{"../template.js":12,"../utils.js":13,"./expression":8,"./html-common-rules":9,"elenpi":17}],11:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils');
@@ -607,7 +1093,7 @@ PureNode.prototype  = {
 
 module.exports = PureNode;
 
-},{"./utils":9}],8:[function(require,module,exports){
+},{"./utils":13}],12:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 (function() {
@@ -651,15 +1137,15 @@ module.exports = PureNode;
 		return templ;
 	}
 
-	function execHandler(callee, fn, context, factory) {
+	function execHandler(callee, fn, context, factory, promises, error) {
 		try {
-			return fn.call(callee, callee.context || context, factory);
+			fn.call(callee, context, factory, promises, error);
 		} catch (e) {
 			return e;
 		}
 	}
 
-	function execQueue(callee, queue, context, factory, error) {
+	function execQueue(callee, queue, context, factory, promises, error) {
 		var handler = queue[0],
 			nextIndex = 0,
 			r;
@@ -670,48 +1156,42 @@ module.exports = PureNode;
 					handler = queue[nextIndex];
 					continue;
 				}
-				r = execHandler(callee, handler.toElement, context, factory);
-				error = null;
+				execHandler(callee, handler.toElement, context, factory, promises, error);
+				return;
 			} else {
 				if (handler.type === 'catch' || !handler.toElement) {
 					handler = queue[nextIndex];
 					continue;
 				}
-				r = execHandler(callee, handler.toElement, context, factory);
-				/*if (r && r.then) {
-					var rest = queue.slice(nextIndex);
-					return r.then(function(s) {
-						return execQueue(callee, rest, context, factory);
-					}, function(e) {
-						return execQueue(callee, rest, context, factory, e);
-					});
-				}*/
+				r = execHandler(callee, handler.toElement, context, factory, promises);
 			}
-			if (r instanceof Error)
+			if (r)
 				error = r;
 			handler = queue[nextIndex];
 		}
 		if (error)
-			console.error('y.Template exec error : ', error, error.stack);
-		return error || r;
+			throw error;
 	}
 
 	Template.prototype = {
-		call: function(caller, context, factory) {
-			return execQueue(caller, this._queue, context, factory || (utils.isServer ? Virtual : document));
+		call: function(caller, context, factory, promises) {
+			execQueue(caller, this._queue, context, factory || (utils.isServer ? Virtual : document), promises);
 		},
-		toElement: function(context, factory) {
+		toElement: function(context, factory, promises) {
+			promises = promises || [];
 			var caller = new Container({
-					factory: factory
-				}),
-				output = execQueue(caller, this._queue, context, factory || (utils.isServer ? Virtual : document));
+				factory: factory
+			});
+			execQueue(caller, this._queue, context, factory || (utils.isServer ? Virtual : document), promises);
+			if (promises.length)
+				caller.promises = promises;
 			return caller;
 		},
-		toString: function(context, descriptor) {
+		toString: function(context, descriptor, promises) {
 			descriptor = descriptor ||  new StringOutputDescriptor();
 			for (var i = 0, len = this._queue.length; i < len; ++i)
 				if (this._queue[i].toString)
-					this._queue[i].toString(context, descriptor);
+					this._queue[i].toString(context, descriptor, promises);
 			return descriptor.children;
 		},
 		//_____________________________ BASE Template handler (every template handler is from one of those two types (done or catch))
@@ -736,14 +1216,14 @@ module.exports = PureNode;
 			var type = typeof condition;
 			if (type === 'string')
 				condition = interpolable(condition);
-			return this.done(function(context, factory) {
+			return this.done(function(context, factory, promises) {
 				var ok = condition,
 					self = this;
 				var exec = function(type, path, ok) {
 					if (ok)
-						return trueCallback.call(self, context, factory);
+						return trueCallback.call(self, context, factory, promises);
 					else if (falseCallback)
-						return falseCallback.call(self, context, factory);
+						return falseCallback.call(self, context, factory, promises);
 				};
 				if (condition && condition.__interpolable__) {
 					ok = condition.output(context);
@@ -751,23 +1231,22 @@ module.exports = PureNode;
 				} else if (type === 'function')
 					ok = condition.call(this, context);
 				return exec('set', ok);
-			}, function(context, descriptor) {
+			}, function(context, descriptor, promises) {
 				var ok;
 				if (condition && condition.__interpolable__)
 					ok = condition.output(context);
 				else if (type === 'function')
 					ok = condition.call(this, context);
 				if (ok)
-					return trueCallback.toString(context, descriptor);
+					return trueCallback.toString(context, descriptor, promises);
 				else if (falseCallback)
-					return falseCallback.toString(context, descriptor);
+					return falseCallback.toString(context, descriptor, promises);
 			});
 			return this;
 		},
 		//________________________________ CONTEXT and Assignation
 		set: function(path, value) {
 			return this.done(function(context) {
-				context = context || this.context;
 				if (!context)
 					throw utils.produceError('no context avaiable to set variable in it. aborting.', this);
 				context.set(path, value);
@@ -811,14 +1290,14 @@ module.exports = PureNode;
 			});
 		},
 		with: function(path, template) {
-			return this.done(function(context, factory) {
+			return this.done(function(context, factory, promises) {
 				// data, handlers, parent, path
 				var ctx = new Context({
 					data: typeof path === 'string' ? context.get(path) : path,
 					parent: context,
 					path: path
 				})
-				template.call(this, ctx, factory);
+				template.call(this, ctx, factory, promises);
 			}, function(context, descriptor) {
 				var newDescriptor = new StringOutputDescriptor();
 				template.toString(context, newDescriptor)
@@ -864,9 +1343,16 @@ module.exports = PureNode;
 			});
 		},
 		disabled: function(value) {
+			var invert = false;
+			if (value && value[0] === '!') {
+				value = value.substring(1);
+				invert = true;
+			}
 			return this.done(function(context) {
 				var self = this;
 				var disable = function(type, path, newValue) {
+					if (invert)
+						newValue = !newValue;
 					if (newValue)
 						self.setAttribute('disabled');
 					else
@@ -934,10 +1420,17 @@ module.exports = PureNode;
 			});
 		},
 		setClass: function(name, flag) {
+			var invert = false;
+			if (flag && flag[0] === '!') {
+				flag = flag.substring(1);
+				invert = true;
+			}
 			return this.done(function(context) {
 				var self = this;
 
 				function applyClass(type, path, newValue) {
+					if (invert)
+						newValue = !newValue;
 					if (newValue)
 						utils.setClass(self, name);
 					else
@@ -953,7 +1446,7 @@ module.exports = PureNode;
 				} else
 					applyClass('set', null, true);
 			}, function(context, descriptor) {
-				if (flag === undefined || context.get(flag))
+				if (flag === undefined || (invert ? !context.get(flag) : context.get(flag)))
 					descriptor.classes += ' ' + name;
 			});
 		},
@@ -980,25 +1473,36 @@ module.exports = PureNode;
 			);
 		},
 		visible: function(flag) {
+			var invert = false;
+			if (flag[0] === '!') {
+				flag = flag.substring(1);
+				invert = true;
+			}
 			return this.done(
 				// to Element
 				function(context) {
 					var val = flag,
 						self = this,
-						initial = (this.style ? this.style.display : 'block') || 'block';
+						initial = (this.style ? this.style.display : '') || '';
 					if (!this.style)
 						this.style = {};
 					if (typeof flag === 'string') {
 						val = context.get(flag);
 						(this._binds = this._binds || []).push(context.subscribe(flag, function(type, path, newValue) {
+							if (invert)
+								newValue = !newValue;
 							self.style.display = newValue ? initial : 'none';
 						}));
 					}
+					if (invert)
+						val = !val;
 					this.style.display = val ? initial : 'none';
 				},
 				// To String
 				function(context, descriptor) {
 					var val = typeof flag === 'string' ? context.get(flag) : flag;
+					if (invert)
+						val = !val;
 					if (!val)
 						descriptor.style += 'display:none;';
 				}
@@ -1037,12 +1541,12 @@ module.exports = PureNode;
 			}
 			return this.done(
 				// toElement
-				function(context, factory) {
+				function(context, factory, promises) {
 					var node = factory.createElement(name),
 						promises = [],
 						p;
 					for (var i = 0, len = args.length; i < len; ++i) {
-						p = args[i].call(node, this.childrenContext || context, factory);
+						p = args[i].call(node, this.childrenContext || context, factory, promises);
 						if (p && p.then)
 							promises.push(p);
 					}
@@ -1117,7 +1621,7 @@ module.exports = PureNode;
 			this._hasEach = true;
 			return this.done(
 				// toElement
-				function(context, factory) {
+				function(context, factory, promises) {
 					var self = this,
 						template = getEachTemplate(this, templ),
 						container = new PureNode();
@@ -1135,7 +1639,7 @@ module.exports = PureNode;
 							child = new PureNode();
 						child.context = ctx;
 						container.childNodes.push(child);
-						template.call(child, ctx, factory);
+						template.call(child, ctx, factory, promises);
 						if ((!self.__yPureNode__ || self.mountPoint) && child.childNodes)
 							utils.mountChildren(child, self.mountPoint || self, nextSibling);
 					}
@@ -1228,135 +1732,7 @@ module.exports = PureNode;
 
 })();
 
-
-/*
-
-
-	Parser : 
-		split html texts in static/interpolable atoms
-		interpret with new Function() to allow complexe expression
-
-	Should :
-
-		rename _yamvish_binds in _binds
-		rename all privates vars with _*
-
-		for each template handler : 
-		add args in queue (through done) and place inner functions outside : no more closure
-
-	Context with *
-
-		could register to path.*
-		and receive the * as key  +  value
-		then items[key].reset(value)
-
-			Should be OK : to be tested more accurately
-
-	Eacher : 
-
-		hybrid structure ?												OK
-			virtual that could contains real DOM node in childNodes
-
-		associate to real DOMNode that execute 'each' the virtual node that hold children  		OK
-
-		DOMNode.childNodes = [ flat array of real nodes ]
-		DOMNode.virtuals = [ Virtual nodes that hold structure (pure + hybrid) ] 
-
-		ok but what about deletion ?
-
-			through virtual structure get DOM nodes references, delete them
-
-		ok what about push or insert/growing with deco just after ?
-
-			apply template on new virtual pure/hybrid node for structure 
-			insert its childNodes just after last node from structure
-
-		==> maybe introduce special token/tag/comment for each/filter/sort 
-			=> it resolves the html/js template equivalence
-		e.g. 
-
-			<div ...>
-				<h1>...</h1>
-				<each:users filter="name" sort="lastname">
-						
-
-				</each>
-				...
-				<each:events>
-					
-
-				</each>
-				...
-				<todo-list:todoId  />
-			</div>
-
-
-
-	ES5/6
-
-		get setter for
-			textContent/nodeValue
-
-		arrows everywhere
-
-		arguments manip
-
-		simple interpolation
-
-		classes
-
-
-		...
-
-
-
-	Usage
-
-
-		var templ = y.html.toTemplate('<div>...</div>');
-
-
-
-
-		var string = templ.toString(context);
-
-		// or
-
-		templ.toElement(context)
-		.then(function(virtual){
-			// virtual has been fully constructed
-			virtual.mount('#myid');
-			context.set('loading', false);
-		});
-
-
-		//...
-		virtual.unmount();
-		
-		virtual.appendTo(".bloupi")
-		virtual.prependTo(".bloupi")
-
-		//... 
-		virtual.destroy();
-
-
-
-		virtual.childNodes == [ DOMNodes ]
-		virtual.children = [ Virtuals ]
-
-		//_________________________
-
-
-		var node = document.createElement('div');
-
-
-		var virtual = templ.call(node, context);
-
-
-
- */
-
-},{"./container":2,"./context":3,"./interpolable":5,"./parsers/dom-to-template":6,"./pure-node":7,"./utils":9,"./virtual":11}],9:[function(require,module,exports){
+},{"./container":2,"./context":3,"./interpolable":6,"./parsers/dom-to-template":7,"./pure-node":11,"./utils":13,"./virtual":15}],13:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 //__________________________________________________________ UTILS
@@ -1483,51 +1859,17 @@ function mergeProto(src, target) {
 		target[i] = src[i];
 }
 
-//_____________________________ QUEUE EXECUTION (to be specilaise for filters)
 
-function execHandler(callee, fn, context) {
-	try {
-		return fn.call(callee, callee.context || context);
-	} catch (e) {
-		return e;
-	}
-}
 
-function execQueue(callee, queue, context, error) {
+function execFilterQueue(callee, queue, arg) {
 	var handler = queue[0],
 		nextIndex = 0,
-		r;
+		r = arg;
 	while (handler) {
-		nextIndex++;
-		if (error) {
-			if (handler.type !== 'catch') {
-				handler = queue[nextIndex];
-				continue;
-			}
-			r = execHandler(callee, handler.fn, context, error);
-			error = null;
-		} else {
-			if (handler.type === 'catch') {
-				handler = queue[nextIndex];
-				continue;
-			}
-			r = execHandler(callee, handler.fn, context);
-			if (r && r.then) {
-				var rest = queue.slice(nextIndex);
-				return r.then(function(s) {
-					return execQueue(callee, rest, context);
-				}, function(e) {
-					return execQueue(callee, rest, context, e);
-				});
-			}
-		}
-		if (r instanceof Error)
-			error = r;
-		handler = queue[nextIndex];
+		r = handler.fn.call(callee, r);
+		handler = queue[++nextIndex];
 	}
-	if (error)
-		console.error('has error : ', error, error.stack);
-	return error || r;
+	return r;
 }
 
 
@@ -1569,8 +1911,7 @@ function findNextSibling(node) {
 module.exports = {
 	isServer: (typeof window === 'undefined') && (typeof document === 'undefined'),
 	mountChildren: mountChildren,
-	execHandler: execHandler,
-	execQueue: execQueue,
+	execFilterQueue: execFilterQueue,
 	mergeProto: mergeProto,
 	destroyElement: destroyElement,
 	destroyChildren: destroyChildren,
@@ -1598,7 +1939,7 @@ module.exports = {
 	}
 }
 
-},{}],10:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -1614,12 +1955,13 @@ var View = function View(opt) {
 	this.factory = opt.factory;
 	Context.call(this, opt);
 	Container.call(this, opt);
+	this.promises = [];
 }
 utils.mergeProto(Template.prototype, View.prototype);
 utils.mergeProto(Context.prototype, View.prototype);
 utils.mergeProto(Container.prototype, View.prototype);
 View.prototype.done = function(fn) {
-	fn.call(this, this, this.factory || (utils.isServer ? Virtual : document)); // apply directly toElement handler on this
+	fn.call(this, this, this.factory || (utils.isServer ? Virtual : document), this.promises); // apply directly toElement handler on this
 	return this;
 };
 View.prototype.destroy = function() {
@@ -1629,6 +1971,7 @@ View.prototype.destroy = function() {
 delete View.prototype['catch'];
 delete View.prototype.call;
 delete View.prototype.toElement;
+delete View.prototype.context;
 delete View.prototype.id;
 delete View.prototype.attr;
 delete View.prototype.setClass;
@@ -1639,7 +1982,7 @@ delete View.prototype.contentEditable;
 
 module.exports = View;
 
-},{"./container":2,"./context":3,"./template":8,"./utils":9,"./virtual":11}],11:[function(require,module,exports){
+},{"./container":2,"./context":3,"./template":12,"./utils":13,"./virtual":15}],15:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -1723,7 +2066,453 @@ Virtual.createTextNode = function(value) {
 
 module.exports = Virtual;
 
-},{"./emitter":4,"./pure-node":7,"./utils":9}],12:[function(require,module,exports){
+},{"./emitter":4,"./pure-node":11,"./utils":13}],16:[function(require,module,exports){
+/**
+ * c3po : Lightweight but powerful protocols manager.
+ *  
+ * Aimed to be used both sides (server side and/or browser side) to give real isomorphic approach when designing object that need ressources.
+ * 
+ * @author Gilles Coomans <gilles.coomans@gmail.com>
+ * @licence MIT
+ */
+(function(define) {
+	"use strict";
+	define("c3po", [], function() {
+		var parser = /^([\w-]+)(?:\.([\w-]+)(?:\(([^\)]*)\))?)?::([^$]*)/;
+
+		function parseRequest(request, obj) {
+			var match = parser.exec(request);
+			if (match) {
+				obj.protocol = match[1];
+				obj.method = match[2] || "get";
+				obj.args = match[3] ? match[3].split(",")
+					.map(function(arg) {
+						return arg.trim();
+					}) : null;
+				obj.pointer = match[4];
+				obj.interpolable = c3po.interpolator ? c3po.interpolator.isInterpolable(obj.pointer) : false;
+			}
+		}
+
+		var Request = function(request) {
+			this.__c3po__ = true;
+			this.original = request;
+			if (request && request[0] === '<')
+				return;
+			parseRequest(request, this);
+		};
+
+		function exec(protocol, self, args) {
+			if (!protocol[self.method])
+				throw new Error("there is no method named " + self.method + " in protocol " + self.protocol + "!");
+			return protocol[self.method].apply(protocol, args);
+		}
+
+		function getProtocol(name) {
+			if (typeof name === 'string') {
+				var protocol;
+				// first : look in contextualised namespace if any
+				if (c3po.fromGlocal)
+					protocol = c3po.fromGlocal(name);
+				// or look in global namespace
+				if (!protocol)
+					protocol = c3po.protocols[name];
+				if (!protocol)
+					throw new Error("no protocol found with : ", name);
+				return protocol;
+			}
+			return name;
+		}
+
+		function initialiseProtocol(protocol) {
+			return new Promise(function(resolve, reject) {
+				var promise = protocol.initialising ? protocol.initialising : protocol.init();
+				if (promise && typeof promise.then === 'function') {
+					// promised init case
+					protocol.initialising = promise.then(function() {
+						protocol.initialising = null;
+						protocol.initialised = true;
+						resolve(protocol);
+					}, reject);
+				} else {
+					protocol.initialised = true;
+					resolve(protocol);
+				}
+			});
+		}
+
+		Request.prototype = {
+			exec: function(options, context) {
+				if (!this.protocol)
+					return Promise.resolve(this.original);
+				options = options || options;
+				var protocol = c3po.protocol(this.protocol),
+					uri = (this.interpolable && c3po.interpolator && context) ? c3po.interpolator.interpolate(this.pointer, context) : this.pointer,
+					self = this,
+					args = this.args ? [].concat(this.args, uri, options) : [uri, options];
+				return protocol.then(function(protocol) {
+					return exec(protocol, self, args);
+				});
+			}
+		};
+		var c3po = {
+			Request: Request,
+			requestCache: null, // simply set to {} to allow caching
+			protocols: {
+				dummy: { // dummy:: protocol for test and demo
+					get: function(url) {
+						return {
+							dummy: url
+						};
+					}
+				}
+			},
+			fromGlocal: null, // to use contextualised protocols namespace. 
+			interpolator: null, // to allow request interpolation on get
+			protocol: function(name) {
+				return new Promise(function(resolve, reject) {
+					var protocol = getProtocol(name);
+					// manage flattener
+					if (protocol._deep_flattener_ && !protocol._deep_flattened_)
+						return (protocol._deep_flattening_ ? protocol._deep_flattening_ : protocol.flatten())
+							.then(c3po.protocol)
+							.then(resolve, reject);
+					// manage ocm resolution
+					if (protocol._deep_ocm_)
+						protocol = protocol();
+					// manage initialisation if needed
+					if (protocol.init && !protocol.initialised)
+						return initialiseProtocol(protocol).then(resolve, reject);
+					resolve(protocol);
+				});
+			},
+			get: function(request, options, context) {
+				if (!request.__c3po__) {
+					if (this.requestCache && this.requestCache[request])
+						request = this.requestCache[request];
+					else {
+						request = new Request(request);
+						if (this.requestCache)
+							this.requestCache[request.original] = request;
+					}
+				}
+				return request.exec(options, context);
+			},
+			getAll: function(requests, options, context) {
+				return Promise.all(requests.map(function(request) {
+					return c3po.get(request, options, context);
+				}));
+			}
+		};
+
+		// module.exports = c3po;
+		return c3po;
+	});
+})(typeof define !== 'undefined' ? define : function(id, deps, factory) { // AMD/RequireJS format if available
+	if (typeof module !== 'undefined')
+		module.exports = factory(); // CommonJS environment
+	else if (typeof window !== 'undefined')
+		window[id] = factory(); // raw script, assign to c3po global
+	else
+		console.warn('"%s" has not been mounted somewhere.', id);
+});
+
+},{}],17:[function(require,module,exports){
+(function() {
+    var defaultSpaceRegExp = /^[\s\n\r]+/;
+
+    function exec(string, rule, descriptor, parser, opt) {
+        if (typeof rule === 'string')
+            rule = parser.rules[rule];
+        var rules = rule._queue;
+        for (var i = 0, len = rules.length; i < len /*&& string*/ ; ++i) {
+            var current = rules[i];
+            if (current.__lexer__)
+                string = exec(string, current, descriptor, parser, opt);
+            else // is function
+                string = current.call(parser, string, descriptor, opt);
+            if (string === false)
+                return false;
+        }
+        return string;
+    };
+
+    function Rule() {
+        this._queue = [];
+        this.__lexer__ = true;
+    };
+
+    Rule.prototype = {
+        // base for all rule's handlers
+        done: function(callback) {
+            this._queue.push(callback);
+            return this;
+        },
+        // for debug purpose
+        log: function(title) {
+            title = title || '';
+            return this.done(function(string, descriptor, opt) {
+                console.log("elenpi.log : ", title, string, descriptor);
+                return string;
+            });
+        },
+        //
+        regExp: function(reg, optional, as) {
+            return this.done(function(string, descriptor, opt) {
+                if (!string)
+                    if (optional)
+                        return string;
+                    else
+                        return false;
+                var cap = reg.exec(string);
+                if (cap) {
+                    if (as) {
+                        if (typeof as === 'string')
+                            descriptor[as] = cap[0];
+                        else
+                            as.call(this, descriptor, cap, opt);
+                    }
+                    return string.substring(cap[0].length);
+                }
+                if (!optional)
+                    return false;
+                return string;
+            });
+        },
+        char: function(test, optional) {
+            return this.done(function(string, descriptor) {
+                if (!string)
+                    return false;
+                if (string[0] === test)
+                    return string.substring(1);
+                if (optional)
+                    return string;
+                return false;
+            });
+        },
+        xOrMore: function(name, rule, separator, minimum) {
+            minimum = minimum || 0;
+            return this.done(function(string, descriptor, opt) {
+                var output = [];
+                var newString = true,
+                    count = 0;
+                while (newString && string) {
+                    var newDescriptor = name ? (this.createDescriptor ? this.createDescriptor() : {}) : descriptor;
+                    newString = exec(string, rule, newDescriptor, this, opt);
+                    if (newString !== false) {
+                        count++;
+                        string = newString;
+                        if (!newDescriptor.skip)
+                            output.push(newDescriptor);
+                        if (separator && string) {
+                            newString = exec(string, separator, newDescriptor, this, opt);
+                            if (newString !== false)
+                                string = newString;
+                        }
+                    }
+                }
+                if (count < minimum)
+                    return false;
+                if (name && output.length)
+                    descriptor[name] = output;
+                return string;
+            });
+        },
+        zeroOrMore: function(as, rule, separator) {
+            return this.xOrMore(as, rule, separator, 0);
+        },
+        oneOrMore: function(as, rule, separator) {
+            return this.xOrMore(as, rule, separator, 1);
+        },
+        zeroOrOne: function(as, rule) {
+            if (arguments.length === 1) {
+                rule = as;
+                as = null;
+            }
+            return this.done(function(string, descriptor, opt) {
+                if (!string)
+                    return string;
+                var newDescriptor = as ? (this.createDescriptor ? this.createDescriptor() : {}) : descriptor,
+                    res = exec(string, rule, newDescriptor, this, opt);
+                if (res !== false) {
+                    if (as)
+                        descriptor[as] = newDescriptor;
+                    string = res;
+                }
+                return string;
+            });
+        },
+        oneOf: function(as, rules) {
+            if (arguments.length === 1) {
+                rules = as;
+                as = null;
+            }
+            return this.done(function(string, descriptor, opt) {
+                if (!string)
+                    return false;
+                var count = 0;
+                while (count < rules.length) {
+                    var newDescriptor = as ? (this.createDescriptor ? this.createDescriptor() : {}) : descriptor,
+                        newString = exec(string, rules[count], newDescriptor, this, opt);
+                    if (newString !== false) {
+                        if (as)
+                            descriptor[as] = newDescriptor;
+                        return newString;
+                    }
+                    count++;
+                }
+                return false;
+            });
+        },
+        rule: function(name) {
+            return this.done(function(string, descriptor, opt) {
+                var rule = this.rules[name];
+                if (!rule)
+                    throw new Error('elenpi.Rule :  rules not found : ' + name);
+                return exec(string, rule, descriptor, this, opt);
+            });
+        },
+        skip: function() {
+            return this.done(function(string, descriptor) {
+                descriptor.skip = true;
+                return string;
+            });
+        },
+        space: function(needed) {
+            return this.done(function(string, descriptor) {
+                if (!string)
+                    if (needed)
+                        return false;
+                    else
+                        return string;
+                var cap = (this.rules.space || defaultSpaceRegExp).exec(string);
+                if (cap)
+                    return string.substring(cap[0].length);
+                else if (needed)
+                    return false;
+                return string;
+            });
+        },
+        end: function(needed) {
+            return this.done(function(string, descriptor) {
+                if (!string || !needed)
+                    return string;
+                return false;
+            });
+        }
+    };
+
+    var Parser = function(rules, defaultRule) {
+        this.rules = rules;
+        this.defaultRule = defaultRule;
+    };
+    Parser.prototype = {
+        exec: function(string, descriptor, rule, opt) {
+            if (!rule)
+                rule = this.rules[this.defaultRule];
+            return exec(string, rule, descriptor, this, opt);
+        },
+        parse: function(string, rule, opt) {
+            var descriptor = this.createDescriptor ? this.createDescriptor() : {};
+            var ok = this.exec(string, descriptor, rule, opt);
+            if (ok === false || ok.length > 0)
+                return false;
+            return descriptor;
+        }
+    };
+
+    var elenpi = {
+        r: function() {
+            return new Rule();
+        },
+        Rule: Rule,
+        Parser: Parser
+    };
+
+    if (typeof module !== 'undefined' && module.exports)
+        module.exports = elenpi; // use common js if avaiable
+    else this.elenpi = elenpi; // assign to global window
+})();
+//___________________________________________________
+
+},{}],18:[function(require,module,exports){
+(function() {
+	'use strict';
+	var c3po = require('c3po/index'),
+		Context = require('../lib/context'),
+		View = require('../lib/view'),
+		Template = require('../lib/template'),
+		interpolable = require('../lib/interpolable').interpolable;
+
+	function bindMap(map, self, context, factory, promises, before, after, fail) {
+		Object.keys(map).forEach(function(i) {
+			if (map[i].__interpolable__)
+				map[i].subscribeTo(context, function(type, path, value) {
+					if (before)
+						before.call(self, context, factory, promises);
+					context.setAsync(i, c3po.get(value))
+						.then(function(s) {
+							if (after)
+								after.call(self, context, factory, promises);
+						}, function(e) {
+							if (fail)
+								return fail.call(self, context, factory, promises, e);
+							throw e;
+						});
+				});
+		});
+	};
+
+	View.prototype.load = Template.prototype.load = function(map, arg1, arg2, arg3, arg4) {
+		var path, before, after, fail;
+		if (typeof map === 'string') {
+			path = map;
+			map = {};
+			map[path] = arg1;
+			before = arg2;
+			after = arg3;
+			fail = arg4;
+		} else {
+			before = arg1;
+			after = arg2;
+			fail = arg3;
+		}
+		for (var i in map)
+			map[i] = interpolable(map[i]);
+
+		return this.done(function(context, factory, promises) {
+			var self = this,
+				p;
+			bindMap(map, this, context, factory, promises, before, after, fail);
+			if (before)
+				before.call(self, context, factory, promises);
+			var pr = [],
+				uri;
+			for (var i in map) {
+				uri = map[i].__interpolable__ ? map[i].output(context) : map[i];
+				pr.push(context.setAsync(i, c3po.get(uri)));
+			}
+			if (pr.length == 1)
+				p = pr[0];
+			else
+				p = Promise.all(pr);
+			p.then(function(s) {
+				if (after)
+					after.call(self, context, factory, promises);
+			}, function(e) {
+				if (fail)
+					return fail.call(self, context, factory, promises, e);
+				throw e;
+			});
+			promises.push(p);
+		}, true);
+	};
+
+
+	module.exports = c3po;
+})();
+
+},{"../lib/context":3,"../lib/interpolable":6,"../lib/template":12,"../lib/view":14,"c3po/index":16}],19:[function(require,module,exports){
 /**
  * A reimplmentation RQL for JavaScript arrays based on rql/js-array from Kris Zyp (https://github.com/persvr/rql).
  * No more eval or new Function.
@@ -2223,7 +3012,7 @@ module.exports = Virtual;
 	module.exports = rql;
 })();
 
-},{"rql/parser":14}],13:[function(require,module,exports){
+},{"rql/parser":21}],20:[function(require,module,exports){
 (function() {
 	'use strict';
 	var rql = require('./rql-array'),
@@ -2255,7 +3044,7 @@ module.exports = Virtual;
 	};
 })();
 
-},{"../lib/context":3,"../lib/interpolable":5,"../lib/template":8,"../lib/view":10,"./rql-array":12}],14:[function(require,module,exports){
+},{"../lib/context":3,"../lib/interpolable":6,"../lib/template":12,"../lib/view":14,"./rql-array":19}],21:[function(require,module,exports){
 /**
  * This module provides RQL parsing. For example:
  * var parsed = require("./parser").parse("b=3&le(c,5)");
@@ -2546,7 +3335,7 @@ exports.Query = function(){
 return exports;
 });
 
-},{"./util/contains":15}],15:[function(require,module,exports){
+},{"./util/contains":22}],22:[function(require,module,exports){
 ({define:typeof define!=='undefined'?define:function(deps, factory){module.exports = factory(exports);}}).
 define([], function(){
 return contains;
