@@ -38,11 +38,11 @@
     "jshint-stylish": "^1.0.1"
   },
   "dependencies": {
-    "aright": "^0.1.1",
+    "aright": "^0.1.2",
     "c3po": "^1.0.1",
     "elenpi": "^0.2.5",
+    "min-history": "^0.1.4",
     "orql": "^0.1.0",
-    "routedsl": "^0.1.0",
-    "min-history": "^0.1.4"
+    "routedsl": "^0.1.0"
   }
 }

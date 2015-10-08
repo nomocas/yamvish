@@ -44,6 +44,7 @@
     <button onclick="route();">route</button>
     <button onclick="y.navigateTo('/campaign/13/?hello');">/campaign/13/?hello</button>
     <button onclick="y.navigateTo('/campaign/29');">/campaign/29</button>
+    <button onclick="validation();">validation</button>
     <div id="mocha"></div>
     <script type="text/javascript" src="node_modules/min-history/dist/min-history.min.js"></script>
     <script type="text/javascript">
@@ -348,6 +349,23 @@
                 .h(1, '{{ campaign.title }}')
                 .p('{{ campaign.id }}')
                 .mount('#mocha');
+        } catch (e) {
+            console.log("error : ", e, e.stack);
+        }
+    }
+
+    function validation() {
+        try {
+            var view = new y.View()
+
+            .set('title', 'aaa@vbb.com')
+                .validate('title', y.aright.rules.email)
+
+            .input('text', '{{ title }}')
+                .p('error', y().visible('$error.title'))
+
+            .mount('#mocha');
+
         } catch (e) {
             console.log("error : ", e, e.stack);
         }
