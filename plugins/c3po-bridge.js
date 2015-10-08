@@ -1,6 +1,8 @@
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
+
 (function() {
 	'use strict';
-	var c3po = require('c3po/index'),
+	var c3po = require('c3po'),
 		Context = require('../lib/context'),
 		View = require('../lib/view'),
 		Template = require('../lib/template'),
@@ -42,7 +44,7 @@
 		for (var i in map)
 			map[i] = interpolable(map[i]);
 
-		return this.done(function(context, factory, promises) {
+		return this.exec(function(context, factory, promises) {
 			var self = this,
 				p;
 			bindMap(map, this, context, factory, promises, before, after, fail);

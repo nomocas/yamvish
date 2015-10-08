@@ -109,8 +109,9 @@
 
 //____________________________________________________ YAMVISH
 
-var utils = require('./lib/utils');
 
+// core
+var utils = require('./lib/utils');
 var y = function(t) {
 	return new y.Template(t);
 };
@@ -122,10 +123,6 @@ y.PureNode = require('./lib/pure-node');
 y.Virtual = require('./lib/virtual');
 y.Container = require('./lib/container');
 y.View = require('./lib/view');
-y.c3po = require('./plugins/c3po-bridge');
-y.rql = require('./plugins/rql-array');
-require('./plugins/rql');
-
 var interpolable = require('./lib/interpolable');
 y.interpolable = interpolable.interpolable;
 y.Interpolable = interpolable.Interpolable;
@@ -134,7 +131,14 @@ y.Interpolable = interpolable.Interpolable;
 y.dom = require('./lib/parsers/dom-to-template');
 y.html = require('./lib/parsers/html-to-template');
 y.expression = require('./lib/parsers/expression');
-y.elenpi = require('elenpi');
+
+// Plugins 
+var router = require('./plugins/router');
+for (var i in router)
+	y[i] = router[i];
+y.c3po = require('./plugins/c3po-bridge');
+y.rql = require('./plugins/rql');
+y.aright = require('./plugins/validation');
 
 //________________________________________________ END VIEW
 

@@ -1,13 +1,14 @@
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 (function() {
 	'use strict';
-	var rql = require('./rql-array'),
+	var rql = require('orql'),
 		Context = require('../lib/context'),
 		View = require('../lib/view'),
 		Template = require('../lib/template'),
 		interpolable = require('../lib/interpolable');
 
 	Template.prototype.rqlView = function(path, expr, name) {
-		return this.done(function(context) {
+		return this.exec(function(context) {
 			context.rqlView(path, expr, name);
 		}, true);
 	};
@@ -27,4 +28,6 @@
 			});
 		return this;
 	};
+
+	module.exports = rql;
 })();

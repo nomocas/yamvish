@@ -29,7 +29,6 @@
   "homepage": "https://github.com/nomocas/yamvish",
   "devDependencies": {
     "chai": "^2.2.0",
-    "elenpi": "^0.2.4",
     "gulp": "^3.9.0",
     "gulp-browserify": "^0.5.1",
     "gulp-jshint": "^1.10.0",
@@ -39,7 +38,11 @@
     "jshint-stylish": "^1.0.1"
   },
   "dependencies": {
+    "aright": "^0.1.1",
     "c3po": "^1.0.1",
-    "rql": ">=0.3.1"
+    "elenpi": "^0.2.5",
+    "orql": "^0.1.0",
+    "routedsl": "^0.1.0",
+    "min-history": "^0.1.4"
   }
 }
