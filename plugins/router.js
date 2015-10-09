@@ -1,3 +1,4 @@
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 (function() {
 	'use strict';
 	var Route = require('routedsl'),
@@ -34,13 +35,15 @@
 	};
 
 	function checkRoutes(context, url) {
-		context._routes.some(function(route) {
+		var ok = false;
+		context._routes.forEach(function(route) {
 			var descriptor = route.match(url);
-			if (descriptor)
-				for (var i in descriptor.output)
-					context.set(i, descriptor.output[i]);
-			return descriptor;
+			if (descriptor) {
+				context.set('$route', descriptor.output);
+				ok = true;
+			}
 		});
+		return ok;
 	};
 
 	function bindRouter(context, adapter) {
@@ -53,8 +56,11 @@
 		var popstate = function(e) {
 			var url = window.history.location.relative;
 			// console.log("* POP STATE : %s - ", url, JSON.stringify(window.history.state));
-			self.set('$route', url);
-			checkRoutes(self, url);
+			try {
+				checkRoutes(self, url);
+			} catch (e) {
+				console.log('error on popstate : ', e, e.stack);
+			}
 		};
 
 		// popstate event from back/forward in browser
@@ -68,8 +74,11 @@
 		var setstate = function(e) {
 			var url = window.history.location.relative;
 			// console.log("* SET STATE : %s - ", url, JSON.stringify(window.history.state));
-			self.set('$route', url);
-			checkRoutes(self, url);
+			try {
+				checkRoutes(self, url);
+			} catch (e) {
+				console.log('error on setstate : ', e, e.stack);
+			}
 		};
 
 		// setstate event when pushstate or replace state
