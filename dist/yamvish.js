@@ -129,6 +129,7 @@ y.interpolable = interpolable.interpolable;
 y.Interpolable = interpolable.Interpolable;
 
 // parsers
+y.elenpi = require('elenpi');
 y.dom = require('./lib/parsers/dom-to-template');
 y.html = require('./lib/parsers/html-to-template');
 y.expression = require('./lib/parsers/expression');
@@ -151,7 +152,7 @@ y.addComponent = function(name, template /* or view instance */ ) {
 
 module.exports = y;
 
-},{"./lib/container":2,"./lib/context":3,"./lib/interpolable":6,"./lib/parsers/dom-to-template":7,"./lib/parsers/expression":8,"./lib/parsers/html-to-template":10,"./lib/pure-node":11,"./lib/template":12,"./lib/utils":13,"./lib/view":14,"./lib/virtual":15,"./plugins/c3po-bridge":23,"./plugins/router":24,"./plugins/rql":25,"./plugins/validation":26}],2:[function(require,module,exports){
+},{"./lib/container":2,"./lib/context":3,"./lib/interpolable":6,"./lib/parsers/dom-to-template":7,"./lib/parsers/expression":8,"./lib/parsers/html-to-template":10,"./lib/pure-node":11,"./lib/template":12,"./lib/utils":13,"./lib/view":14,"./lib/virtual":15,"./plugins/c3po-bridge":23,"./plugins/router":24,"./plugins/rql":25,"./plugins/validation":26,"elenpi":18}],2:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -591,8 +592,9 @@ module.exports = Filter;
 
 //_______________________________________________________ INTERPOLABLE
 
-var Interpolable = function(splitted) {
+var Interpolable = function(splitted, strict) {
 	this.__interpolable__ = true;
+	this._strict = strict;
 	if (splitted.length === 3 && splitted[0] === "" && splitted[2] === "") {
 		// single expression with nothing around
 		this.directOutput = splitted[1];
@@ -632,15 +634,24 @@ Interpolable.prototype = {
 		};
 	},
 	output: function(context) {
-		if (this.directOutput)
-			return context.get(this.directOutput);
+		if (this.directOutput) {
+			var o = context.get(this.directOutput);
+			return (typeof o === 'undefined' && !this._strict) ? '' : o;
+		}
 		var out = "",
 			odd = true;
 		for (var j = 0, len = this.splitted.length; j < len; ++j) {
 			if (odd)
 				out += this.splitted[j];
-			else
-				out += context.get(this.splitted[j]);
+			else {
+				var r = context.get(this.splitted[j]);
+				if (typeof r === 'undefined') {
+					if (this._strict)
+						return;
+					out += '';
+				}
+				out += r;
+			}
 			odd = !odd;
 		}
 		return out;
@@ -649,17 +660,69 @@ Interpolable.prototype = {
 
 var splitRegEx = /\{\{\s*([^\}\s]+)\s*\}\}/;
 
-function interpolable(string) {
+function interpolable(string, strict) {
 	var splitted = string.split(splitRegEx);
 	if (splitted.length == 1)
 		return string; // string is not interpolable
-	return new Interpolable(splitted);
+	return new Interpolable(splitted, strict);
 };
 
 module.exports = {
 	interpolable: interpolable,
 	Interpolable: Interpolable
 };
+
+
+
+// "$.Math $.fofo".replace(/(\$)\./g, '_global.')
+
+// "$parent.flo.bar $parent.fofo".replace(/\$parent(\.[a-zA-Z]\w*)*/g, function(path){
+//   return '__context.get('+path+')';
+// });
+
+// "$this * $this".replace(/\$this/g, '__context.data');
+
+
+
+
+/*
+To introduce full expression with global management (e.g. Math.random)
+
+we need to scan expression to find variables path
+
+	case : 
+		$parent
+
+			should be replaced by __context.get(path)
+
+		$this
+			should be replace with __context.data
+
+		$.xxx
+			/(\$)\.(?:[a-zA-Z](?:\w|\.))+/
+			
+		path
+			don't change
+
+		'string' (start not alpha)
+		"string"
+
+		true
+		false
+
+		number (not alpha)
+
+		how to distinguish global vs context path ?
+
+			start global with $
+			{{ ($.Math.random() * (index || $parent.index) ? 'hello' : 'bloupi') | truncate(2).date('yy-mm-dd')  }}
+		
+
+		replace : 
+
+
+		and avoid js keywords
+ */
 
 },{}],7:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
@@ -1381,7 +1444,7 @@ module.exports = PureNode;
 					(this._binds = this._binds || []).push(value.subscribeTo(context, function(type, path, newValue) {
 						self.setAttribute('value', newValue);
 					}));
-					this.setAttribute('value', context.get(value.directOutput));
+					this.setAttribute('value', value.output(context));
 				} else
 					this.setAttribute('value', value);
 			}, function(context, descriptor) {
@@ -1631,7 +1694,7 @@ module.exports = PureNode;
 					else
 						(this._yamvish_containers = this._yamvish_containers || []).push(container);
 
-					function push(value, nextSibling) {
+					function push(value, parent) {
 						var ctx = new Context({
 								data: value,
 								parent: context
@@ -1640,8 +1703,7 @@ module.exports = PureNode;
 						child.context = ctx;
 						container.childNodes.push(child);
 						template.call(child, ctx, factory, promises);
-						if ((!self.__yPureNode__ || self.mountPoint) && child.childNodes)
-							utils.mountChildren(child, self.mountPoint || self, nextSibling);
+						return child;
 					}
 
 					var render = function(type, path, value, index) {
@@ -1651,12 +1713,35 @@ module.exports = PureNode;
 							case 'reset':
 							case 'set':
 								var j = 0,
+									fragment,
+									//parent = (!self.__yPureNode__ || self.mountPoint) && (self.mountPoint || self),
+									//showAtEnd = false,
 									nextSibling = (!self.__yPureNode__ || self.mountPoint) ? utils.findNextSibling(container) : null;
-								for (var len = value.length; j < len; ++j)
-									if (container.childNodes[j])
+
+								// if (parent) {
+								// 	if (parent.style.display != 'none') {
+								// 		parent.style.display = 'none';
+								// 		showAtEnd = true;
+								// 	}
+								// 	// fragment = document.createDocumentFragment();
+								// }
+								for (var len = value.length; j < len; ++j) // reset existing or create new node 
+									if (container.childNodes[j]) // reset existing
 										container.childNodes[j].context.reset(value[j]);
-									else
-										push(value[j], nextSibling);
+									else { // create new node
+										var child = push(value[j]);
+										if ((!self.__yPureNode__ || self.mountPoint) && child.childNodes)
+											utils.mountChildren(child, fragment || self.mountPoint || self, fragment ? null : nextSibling);
+									}
+									// fragment is used to append children (all in one time) without reflow
+									// if (fragment && fragment.children.length) {
+									// 	// console.log('add fragment : ', fragment.children.length)
+									// 	if (nextSibling)
+									// 		(self.mountPoint || self).insertBefore(fragment, nextSibling);
+									// 	else
+									// 		(self.mountPoint || self).appendChild(fragment);
+									// }
+									// delete additional nodes that is not used any more
 								if (j < container.childNodes.length) {
 									var end = j,
 										lenJ = container.childNodes.length;
@@ -1664,13 +1749,18 @@ module.exports = PureNode;
 										utils.destroyElement(container.childNodes[j], true);
 									container.childNodes.splice(end);
 								}
+								// if (showAtEnd)
+								// 	parent.style.display = '';
 								break;
 							case 'removeAt':
 								utils.destroyElement(container.childNodes[index], true);
 								container.childNodes.splice(index, 1);
 								break;
 							case 'push':
-								push(value, (!self.__yPureNode__ || self.mountPoint) ? utils.findNextSibling(container) : null);
+								var nextSibling = utils.findNextSibling(container),
+									child = push(value);
+								if ((!self.__yPureNode__ || self.mountPoint) && child.childNodes)
+									utils.mountChildren(child, self.mountPoint || self, nextSibling);
 								break;
 						}
 					};
@@ -3763,6 +3853,7 @@ function contains(array, item){
 })();
 
 },{"../lib/context":3,"../lib/interpolable":6,"../lib/template":12,"../lib/view":14,"c3po":17}],24:[function(require,module,exports){
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 (function() {
 	'use strict';
 	var Route = require('routedsl'),
@@ -3799,13 +3890,15 @@ function contains(array, item){
 	};
 
 	function checkRoutes(context, url) {
-		context._routes.some(function(route) {
+		var ok = false;
+		context._routes.forEach(function(route) {
 			var descriptor = route.match(url);
-			if (descriptor)
-				for (var i in descriptor.output)
-					context.set(i, descriptor.output[i]);
-			return descriptor;
+			if (descriptor) {
+				context.set('$route', descriptor.output);
+				ok = true;
+			}
 		});
+		return ok;
 	};
 
 	function bindRouter(context, adapter) {
@@ -3818,8 +3911,11 @@ function contains(array, item){
 		var popstate = function(e) {
 			var url = window.history.location.relative;
 			// console.log("* POP STATE : %s - ", url, JSON.stringify(window.history.state));
-			self.set('$route', url);
-			checkRoutes(self, url);
+			try {
+				checkRoutes(self, url);
+			} catch (e) {
+				console.log('error on popstate : ', e, e.stack);
+			}
 		};
 
 		// popstate event from back/forward in browser
@@ -3833,8 +3929,11 @@ function contains(array, item){
 		var setstate = function(e) {
 			var url = window.history.location.relative;
 			// console.log("* SET STATE : %s - ", url, JSON.stringify(window.history.state));
-			self.set('$route', url);
-			checkRoutes(self, url);
+			try {
+				checkRoutes(self, url);
+			} catch (e) {
+				console.log('error on setstate : ', e, e.stack);
+			}
 		};
 
 		// setstate event when pushstate or replace state
