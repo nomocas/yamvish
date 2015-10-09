@@ -31,6 +31,8 @@
 <body>
     <h2 style="margin-left:30px;"><a href="https://github.com/nomocas/yamvish">yamvish</a> tests</h2>
     <button onclick="runToElement();">run</button>
+    <button onclick="toggleActive();">active</button>
+    <button onclick="resetCollection();">reset collection</button>
     <button onclick="unmountElements();">unmount</button>
     <button onclick="mountElements();">mount</button>
     <button onclick="cleanElements();">clean</button>
@@ -38,7 +40,6 @@
     <button onclick="runToString();">string</button>
     <button onclick="runTemplateToString();">templ.string</button>
     <button onclick="runToVirtualToString();">virtual + string</button>
-    <button onclick="toggleActive();">active</button>
     <button onclick="followedEach();">followed each</button>
     <button onclick="load();">load</button>
     <button onclick="route();">route</button>
@@ -56,7 +57,7 @@
     });
     </script>
     <script type="text/javascript">
-    var numNodes = 200;
+    var numNodes = 1000;
 
     function range(size) {
         var output = [];
@@ -86,6 +87,12 @@
         .on('mounted', function() {
             console.log('mounted. from template');
         })
+        .on('unmounted', function() {
+            console.log('unmounted. from template');
+        })
+        .on('destroy', function() {
+            console.log('destroy. from template');
+        })
         .div(
             y()
             .click('hello')
@@ -101,10 +108,14 @@
             .attr('hello', 'world')
             .setClass('active')
             .ul(
-                y().visible('active').each('range',
-                    y().li('{{ $this }}', y().click(function(evt) {
-                        console.log('hello item : ', evt.target.textContent);
-                    }))
+                y().visible('active')
+                .each('range',
+                    y().li(
+                        y().click(function(evt) {
+                            console.log('hello item : ', evt.target.textContent);
+                        })
+                        .text('{{ $this }}')
+                    )
                 )
             )
             .div(
@@ -120,23 +131,26 @@
     function runToElement() {
         try {
             context.data.range = range(numNodes);
-            console.time("yamvish Template.toElement.mount");
-            var time9 = new Date().getTime();
+            var time = new Date().getTime();
+
             container = templ.toElement(context).mount("#mocha");
-            time9 = new Date().getTime() - time9;
-            console.timeEnd("yamvish Template.toElement.mount");
-            context.set('range.0', 'Template.toElement.mount : ' + time9);
-            container.addEventListener('mounted', function(evt) {
-                console.log("mounted : ", evt);
-            });
 
-            container.addEventListener('unmounted', function(evt) {
-                console.log("unmounted : ", evt);
-            });
+            time = new Date().getTime() - time;
+            context.set('range.0', 'Template.toElement.mount : ' + time);
+        } catch (e) {
+            console.log('error : ', e, e.stack);
+        }
+    }
 
-            container.addEventListener('destroy', function(evt) {
-                console.log("destroy : ", evt);
-            });
+    function resetCollection() {
+        try {
+            var rg = range(numNodes);
+            console.time("yamvish context reset collection");
+            var time = new Date().getTime();
+            context.set('range', rg);
+            time = new Date().getTime() - time;
+            console.timeEnd("yamvish context reset collection");
+            context.set('range.0', 'reset collection : ' + time);
         } catch (e) {
             console.log('error : ', e, e.stack);
         }
@@ -145,11 +159,11 @@
     function runToVirtual() {
         try {
             console.time("yamvish Template.toVirtual");
-            var time9 = new Date().getTime();
+            var time = new Date().getTime();
             virtualContainer = templ.toElement(context, y.Virtual);
-            time9 = new Date().getTime() - time9;
+            time = new Date().getTime() - time;
             console.timeEnd("yamvish Template.toVirtual");
-            context.set('range.0', 'Template.toVirtual : ' + time9)
+            context.set('range.0', 'Template.toVirtual : ' + time)
         } catch (e) {
             console.log('error : ', e, e.stack);
         }
@@ -158,11 +172,11 @@
     function runTemplateToString() {
         try {
             console.time("yamvish Template.toString");
-            var time9 = new Date().getTime();
+            var time = new Date().getTime();
             var r = templ.toString(context);
-            time9 = new Date().getTime() - time9;
+            time = new Date().getTime() - time;
             console.timeEnd("yamvish Template.toString");
-            context.set('range.0', 'Template.toString : ' + time9);
+            context.set('range.0', 'Template.toString : ' + time);
             console.log('template.toString : ', r);
         } catch (e) {
             console.log('error : ', e, e.stack);
@@ -172,11 +186,11 @@
     function runToString() {
         try {
             console.time("yamvish container.toString");
-            var time9 = new Date().getTime();
+            var time = new Date().getTime();
             var r = virtualContainer.toString();
-            time9 = new Date().getTime() - time9;
+            time = new Date().getTime() - time;
             console.timeEnd("yamvish container.toString");
-            context.set('range.0', 'virtualContainer.toString : ' + time9)
+            context.set('range.0', 'virtualContainer.toString : ' + time)
             console.log('virtual to string : ', r);
         } catch (e) {
             console.log('error : ', e, e.stack);
@@ -186,11 +200,11 @@
     function runToVirtualToString() {
         try {
             console.time("yamvish Template.toVirtual.toString");
-            var time9 = new Date().getTime();
+            var time = new Date().getTime();
             var r = templ.toElement(context, y.Virtual).toString();
-            time9 = new Date().getTime() - time9;
+            time = new Date().getTime() - time;
             console.timeEnd("yamvish Template.toVirtual.toString");
-            context.set('range.0', 'Template.toVirtual.toString : ' + time9)
+            context.set('range.0', 'Template.toVirtual.toString : ' + time)
             console.log('to virtual to string : ', r);
         } catch (e) {
             console.log('error : ', e, e.stack);
@@ -200,11 +214,11 @@
     function mountElements() {
         try {
             console.time("yamvish Node.mount");
-            var time9 = new Date().getTime();
+            var time = new Date().getTime();
             container.mount('#mocha');
-            time9 = new Date().getTime() - time9;
+            time = new Date().getTime() - time;
             console.timeEnd("yamvish Node.mount");
-            context.set('range.0', 'Node.mount : ' + time9)
+            context.set('range.0', 'Node.mount : ' + time)
         } catch (e) {
             console.log('error : ', e, e.stack);
         }
@@ -233,7 +247,7 @@
 
     function followedEach() {
         console.time("test");
-        var time9 = new Date().getTime();
+        var time = new Date().getTime();
         var view = new y.View()
             // context
             .set('title', 'Write once. Run everywhere.')
@@ -287,11 +301,10 @@
             .push('colors', {
                 color: 'black'
             });
-        // .del('colors.1');
-        time9 = new Date().getTime() - time9;
+        time = new Date().getTime() - time;
 
         console.timeEnd("test");
-        view.set('users.0', 'followed each : ' + time9)
+        view.set('users.0', 'followed each : ' + time)
     }
 
     function load() {
@@ -300,7 +313,7 @@
                 // async simulation
                 return new Promise(function(resolve) {
                     setTimeout(function() {
-                        resolve('hello async ' + req);
+                        resolve('hello ' + req);
                     }, 1000);
                 });
             }
@@ -308,8 +321,8 @@
         try {
             console.time("load");
             window.view = new y.View()
-                .set('id', 12)
-                .load('title', 'text::{{ id }}',
+                .set('aVar', 'some text')
+                .load('title', 'text::{{ aVar }}',
                     y().set('loading', true),
                     y().set('loading', false)
                 )
@@ -343,12 +356,14 @@
                 }
             };
 
-            window.view = new y.View()
+            var view = new y.View()
                 .route('/campaign/s:id/?q:query') // should hide/show node if route match or not
-                .load('campaign', 'campaign::{{ id }}|{{ query }}') // should load only if variables are all defined (here 'id')
+                .load('campaign', 'campaign::{{ $route.id }}|{{ $route.query }}') // should load only if variables are all defined (here 'id')
                 .h(1, '{{ campaign.title }}')
                 .p('{{ campaign.id }}')
                 .mount('#mocha');
+
+
         } catch (e) {
             console.log("error : ", e, e.stack);
         }
@@ -357,14 +372,11 @@
     function validation() {
         try {
             var view = new y.View()
-
-            .set('title', 'aaa@vbb.com')
+                // .set('title', 'aaa@vbb.com')
                 .validate('title', y.aright.rules.email)
-
-            .input('text', '{{ title }}')
+                .input('text', '{{ title }}')
                 .p('error', y().visible('$error.title'))
-
-            .mount('#mocha');
+                .mount('#mocha');
 
         } catch (e) {
             console.log("error : ", e, e.stack);
