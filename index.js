@@ -115,6 +115,7 @@ var utils = require('./lib/utils');
 var y = function(t) {
 	return new y.Template(t);
 };
+y.env = require('./lib/env');
 y.isServer = utils.isServer;
 y.utils = utils;
 y.Context = require('./lib/context');
