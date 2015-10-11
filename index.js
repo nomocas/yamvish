@@ -131,7 +131,7 @@ y.Interpolable = interpolable.Interpolable;
 y.elenpi = require('elenpi');
 y.dom = require('./lib/parsers/dom-to-template');
 y.html = require('./lib/parsers/html-to-template');
-y.expression = require('./lib/parsers/expression');
+// y.expression = require('./lib/parsers/expression');
 
 // Plugins 
 var router = require('./plugins/router');
