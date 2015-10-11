@@ -132,7 +132,7 @@ y.Interpolable = interpolable.Interpolable;
 y.elenpi = require('elenpi');
 y.dom = require('./lib/parsers/dom-to-template');
 y.html = require('./lib/parsers/html-to-template');
-y.expression = require('./lib/parsers/expression');
+// y.expression = require('./lib/parsers/expression');
 
 // Plugins 
 var router = require('./plugins/router');
@@ -152,7 +152,7 @@ y.addComponent = function(name, template /* or view instance */ ) {
 
 module.exports = y;
 
-},{"./lib/container":2,"./lib/context":3,"./lib/interpolable":6,"./lib/parsers/dom-to-template":7,"./lib/parsers/expression":8,"./lib/parsers/html-to-template":10,"./lib/pure-node":11,"./lib/template":12,"./lib/utils":13,"./lib/view":14,"./lib/virtual":15,"./plugins/c3po-bridge":23,"./plugins/router":24,"./plugins/rql":25,"./plugins/validation":26,"elenpi":18}],2:[function(require,module,exports){
+},{"./lib/container":2,"./lib/context":3,"./lib/interpolable":6,"./lib/parsers/dom-to-template":7,"./lib/parsers/html-to-template":10,"./lib/pure-node":11,"./lib/template":12,"./lib/utils":13,"./lib/view":14,"./lib/virtual":15,"./plugins/c3po-bridge":23,"./plugins/router":24,"./plugins/rql":25,"./plugins/validation":26,"elenpi":18}],2:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -295,6 +295,29 @@ Context.prototype = {
 		this.handlers = null;
 		this.map = null;
 	},
+	dependent: function(path, args, func) {
+		var argsOutput = [],
+			willFire,
+			self = this;
+		for (var i = 0, len = args.length; i < len; ++i) {
+			// subscribe to arguments[i]
+			(this.binds = this.binds || []).push(this.subscribe(args[i], function(type, p, value, key) {
+				if (!willFire)
+					willFire = setTimeout(function() {
+						if (willFire) {
+							var argsOutput = [];
+							for (var i = 0, len = args.length; i < len; ++i)
+								argsOutput.push(self.get(args[i]));
+							willFire = null;
+							self.set(path, func.apply(self, argsOutput));
+						}
+					}, 0);
+			}));
+			argsOutput.push(this.get(args[i]));
+		}
+		this.set(path, func.apply(this, argsOutput));
+		return this;
+	},
 	reset: function(data) {
 		this.data = data || {};
 		this.notifyAll('reset', null, this.map, data, '*');
@@ -366,7 +389,7 @@ Context.prototype = {
 	get: function(path) {
 		if (!path.forEach)
 			path = path.split('.');
-		if (path[0] === '$this')
+		if (path[0] === '$this' && path.length === 1)
 			return this.data;
 		else if (path[0] == '$parent') {
 			if (!this.parent)
@@ -586,65 +609,147 @@ Filter.prototype = {
 module.exports = Filter;
 
 },{"./utils":13}],6:[function(require,module,exports){
+(function (global){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
-// var expression = require('./parsers/expression');
+var _all = /true|false|null|\$\.(?:[a-zA-Z]\w*(?:\.\w*)*)|\$this(?:\.\w*)*|\$parent(?:\.\w*)+|\$(?:[a-zA-Z]\w*(?:\.\w*)*)|"[^"]*"|'[^']*'|[a-zA-Z_]\w*(?:\.\w*)*/g,
+	_startThis = /^\$this/,
+	_startParent = /^\$parent/,
+	_arrayAccess = /\.(\d+)/g;
+
+function toFunc(expr) {
+	// console.log('xpr : ', expr);
+	return new Function("__context", "__global", "return " + expr + ";");
+}
+
+function tryExpr(func, context) {
+	try {
+		return func.call(context.data, context, (typeof window !== 'undefined') ? window : global);
+	} catch (e) {
+		console.error(e, env.debug ? e.stack : '');
+		return '';
+	}
+}
+
+function xpr(string, dependencies) {
+	// console.log('xpr parse : ', string);
+	return toFunc(string.replace(_all, function(whole) {
+
+		switch (whole[0]) {
+			case '$':
+				if (whole[1] === '.')
+					return '__global' + whole.substring(1);
+				else {
+					dependencies.push(whole);
+					return '__context.get("' + whole + '")';
+				}
+			case '"':
+			case "'":
+				return whole;
+			default:
+				dependencies.push(whole);
+				return '__context.get("' + whole + '")';
+		}
+	}));
+}
+
+function handler(instance, context, func, index, callback) {
+	return function(type, path, newValue) {
+		// console.log('interpolable handler : ', type, path, newValue);
+		if (instance.dependenciesCount === 1) {
+			instance.results[index] = tryExpr(func, context);
+			callback(type, path, instance.output(context));
+		} else if (!instance.willFire)
+			instance.willFire = setTimeout(function() {
+				if (instance.willFire) {
+					instance.results[index] = tryExpr(func, context);
+					instance.willFire = null;
+					callback(type, path, instance.output(context));
+				}
+			}, 0);
+	};
+}
 
 //_______________________________________________________ INTERPOLABLE
 
+function directOutput(context) {
+	var o = tryExpr(this.parts[1].func, context);
+	return (typeof o === 'undefined' && !this._strict) ? '' : o;
+}
+
 var Interpolable = function(splitted, strict) {
 	this.__interpolable__ = true;
-	this._strict = strict;
-	if (splitted.length === 3 && splitted[0] === "" && splitted[2] === "") {
-		// single expression with nothing around
-		this.directOutput = splitted[1];
-		this.dependencies = [splitted[1]];
-	} else {
-		// interpolable string
-		this.splitted = splitted;
-		this.dependencies = []; // catch expression dependencies
-		for (var i = 1, len = splitted.length; i < len; i = i + 2)
-			this.dependencies.push(splitted[i]);
+	this._strict = strict || false;
+	var dp;
+	if (splitted.length === 3 && splitted[0] === "" && splitted[2] === "")
+		this.directOutput = directOutput;
+
+	// interpolable string
+	this.parts = splitted;
+	this.dependenciesCount = 0;
+	for (var i = 1, len = splitted.length; i < len; i = i + 2) {
+		var dp = [];
+		splitted[i] = {
+			func: xpr(splitted[i], dp),
+			dep: dp
+		};
+		this.dependenciesCount += dp.length;
 	}
 };
 Interpolable.prototype = {
+
 	subscribeTo: function(context, callback) {
-		var binds = [],
-			self = this,
-			willFire,
-			len = this.dependencies.length;
-		for (var i = 0; i < len; ++i)
-			binds.push(context.subscribe(this.dependencies[i], function(type, path, newValue) {
-				if (self.directOutput)
-					callback(type, path, newValue);
-				else if (len === 1)
-					callback(type, path, self.output(context));
-				else if (!willFire)
-					willFire = setTimeout(function() {
-						if (willFire) {
-							willFire = null;
-							callback(type, path, self.output(context));
-						}
-					}, 1);
-			}));
+		var self = this;
+		var instance = {
+			outputed: false,
+			binds: [],
+			results: [],
+			willFire: null,
+			dependenciesCount: this.dependenciesCount,
+			output: function() {
+				var out = '',
+					odd = true,
+					count = 0;
+				for (var i = 0, len = self.parts.length; i < len; i++) {
+					if (odd)
+						out += self.parts[i];
+					else {
+						out += this.outputed ? this.results[count] : (this.results[count] = tryExpr(self.parts[i].func, context));
+						count++;
+					}
+					odd = !odd;
+				}
+				if (!this.outputed)
+					this.outputed = true;
+				return out;
+			}
+		};
+
+		var count = 0;
+		for (var i = 1, len = this.parts.length; i < len; i = i + 2) {
+			var h = handler(instance, context, this.parts[i].func, count, callback),
+				dep = this.parts[i].dep;
+			count++;
+			for (var j = 0, lenJ = dep.length; j < lenJ; j++)
+				instance.binds.push(context.subscribe(dep[j], h));
+		}
 		return function() { // unbind all
-			willFire = null;
-			for (var i = 0; i < binds.length; i++)
-				binds[i]();
+			instance.willFire = null;
+			for (var i = 0; i < instance.binds.length; i++)
+				instance.binds[i]();
 		};
 	},
 	output: function(context) {
-		if (this.directOutput) {
-			var o = context.get(this.directOutput);
-			return (typeof o === 'undefined' && !this._strict) ? '' : o;
-		}
+		if (this.directOutput)
+			return this.directOutput(context);
 		var out = "",
-			odd = true;
-		for (var j = 0, len = this.splitted.length; j < len; ++j) {
+			odd = true,
+			parts = this.parts;
+		for (var j = 0, len = parts.length; j < len; ++j) {
 			if (odd)
-				out += this.splitted[j];
+				out += parts[j];
 			else {
-				var r = context.get(this.splitted[j]);
+				var r = tryExpr(parts[j].func, context);
 				if (typeof r === 'undefined') {
 					if (this._strict)
 						return;
@@ -658,10 +763,11 @@ Interpolable.prototype = {
 	}
 };
 
-var splitRegEx = /\{\{\s*([^\}\s]+)\s*\}\}/;
+var splitRegEx = /\{\{(.+?)\}\}/;
 
 function interpolable(string, strict) {
 	var splitted = string.split(splitRegEx);
+	// console.log('interpolable check : ', splitted);
 	if (splitted.length == 1)
 		return string; // string is not interpolable
 	return new Interpolable(splitted, strict);
@@ -672,58 +778,7 @@ module.exports = {
 	Interpolable: Interpolable
 };
 
-
-
-// "$.Math $.fofo".replace(/(\$)\./g, '_global.')
-
-// "$parent.flo.bar $parent.fofo".replace(/\$parent(\.[a-zA-Z]\w*)*/g, function(path){
-//   return '__context.get('+path+')';
-// });
-
-// "$this * $this".replace(/\$this/g, '__context.data');
-
-
-
-
-/*
-To introduce full expression with global management (e.g. Math.random)
-
-we need to scan expression to find variables path
-
-	case : 
-		$parent
-
-			should be replaced by __context.get(path)
-
-		$this
-			should be replace with __context.data
-
-		$.xxx
-			/(\$)\.(?:[a-zA-Z](?:\w|\.))+/
-			
-		path
-			don't change
-
-		'string' (start not alpha)
-		"string"
-
-		true
-		false
-
-		number (not alpha)
-
-		how to distinguish global vs context path ?
-
-			start global with $
-			{{ ($.Math.random() * (index || $parent.index) ? 'hello' : 'bloupi') | truncate(2).date('yy-mm-dd')  }}
-		
-
-		replace : 
-
-
-		and avoid js keywords
- */
-
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],7:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
@@ -1310,9 +1365,12 @@ module.exports = PureNode;
 		//________________________________ CONTEXT and Assignation
 		set: function(path, value) {
 			return this.exec(function(context) {
-				if (!context)
-					throw utils.produceError('no context avaiable to set variable in it. aborting.', this);
 				context.set(path, value);
+			}, true);
+		},
+		dependent: function(path, args, func) {
+			return this.exec(function(context) {
+				context.dependent(path, args, func);
 			}, true);
 		},
 		push: function(path, value) {
@@ -1432,14 +1490,21 @@ module.exports = PureNode;
 			});
 		},
 		val: function(value) {
-			if (typeof value === 'string')
+			var varPath;
+			if (typeof value === 'string') {
 				value = interpolable(value);
+				if (value.__interpolable__) {
+					if (value.dependenciesCount !== 1)
+						throw new Error("template.val expression could only depend to one variable.");
+					varPath = value.parts[1].dep[0];
+				}
+			}
 			return this.exec(function(context) {
 				var self = this;
 				if (value.__interpolable__) {
 					if (!utils.isServer)
 						this.addEventListener('input', function(event) {
-							context.set(value.directOutput, event.target.value);
+							context.set(varPath, event.target.value);
 						});
 					(this._binds = this._binds || []).push(value.subscribeTo(context, function(type, path, newValue) {
 						self.setAttribute('value', newValue);
@@ -1857,10 +1922,11 @@ function removeClass(node, name) {
 //________________________________ Properties management with dot syntax
 
 function getProp(from, path) {
+	var start = 0;
 	if (path[0] === '$this')
-		return from;
+		start = 1;
 	var tmp = from;
-	for (var i = 0, len = path.length; i < len; ++i)
+	for (var i = start, len = path.length; i < len; ++i)
 		if (!tmp || (tmp = tmp[path[i]]) === undefined)
 			return;
 	return tmp;
