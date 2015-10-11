@@ -46,6 +46,9 @@
     <button onclick="y.navigateTo('/campaign/13/?hello');">/campaign/13/?hello</button>
     <button onclick="y.navigateTo('/campaign/29');">/campaign/29</button>
     <button onclick="validation();">validation</button>
+    <button onclick="testNewFunc();">test new func</button>
+    <button onclick="expression();">xpres</button>
+    <button onclick="dependent();">dependent</button>
     <div id="mocha"></div>
     <script type="text/javascript" src="node_modules/min-history/dist/min-history.min.js"></script>
     <script type="text/javascript">
@@ -57,7 +60,7 @@
     });
     </script>
     <script type="text/javascript">
-    var numNodes = 1000;
+    var numNodes = 200;
 
     function range(size) {
         var output = [];
@@ -246,65 +249,69 @@
 
 
     function followedEach() {
-        console.time("test");
-        var time = new Date().getTime();
-        var view = new y.View()
-            // context
-            .set('title', 'Write once. Run everywhere.')
-            .set('users', ['Bill', 'Baroud'])
-            .set('colors', [{
-                color: 'yellow'
-            }, {
-                color: 'pink'
-            }, {
-                color: 'piretre'
-            }])
-            .set('selectedColor', '')
-            .rqlView('colors', 'colorsView', 'color=match={{ selectedColor }}&sort(-color)')
-            // template
-            .h(1, '{{ title }}')
-            .input('text', '{{ users.1 }}')
-            .input('text', '{{ selectedColor }}')
-            .each('users',
-                y().p('{{ $this }}')
-            )
-            .ul(
-                y().each('colorsView',
-                    y().li('{{ color }} colors')
+        try {
+            console.time("test");
+            var time = new Date().getTime();
+            var view = new y.View()
+                // context
+                .set('title', 'Write once. Run everywhere.')
+                .set('users', ['Bill', 'Baroud'])
+                .set('colors', [{
+                    color: 'yellow'
+                }, {
+                    color: 'pink'
+                }, {
+                    color: 'piretre'
+                }])
+                .set('selectedColor', '')
+                .rqlView('colors', 'colorsView', 'color=match={{ selectedColor }}&sort(-color)')
+                // template
+                .h(1, '{{ title }}')
+                .input('text', '{{ users.1 }}')
+                .input('text', '{{ selectedColor }}')
+                .each('users',
+                    y().p('{{ $this }}')
                 )
-            )
-            .p('{{ title }}')
-            // container
-            .mount('#mocha')
-            .exec(function(context, factory, promises) {
-                promises.push(new Promise(function(resolve, reject) {
-                    setTimeout(function() {
-                        context.set('title', 'yesss')
-                        resolve(true);
-                    }, 1000);
-                }));
+                .ul(
+                    y().each('colorsView',
+                        y().li('{{ color }} colors')
+                    )
+                )
+                .p('{{ title }}')
+                // container
+                .mount('#mocha')
+                .exec(function(context, factory, promises) {
+                    promises.push(new Promise(function(resolve, reject) {
+                        setTimeout(function() {
+                            context.set('title', 'yesss')
+                            resolve(true);
+                        }, 1000);
+                    }));
+                });
+
+
+            view.then(function(s) {
+                console.log("view full rendered");
             });
 
+            // context
+            view.push('users', 'Biloud')
+                .push('users', 'Johnny')
+                .del('users.1')
+                .set('users.1', 'Rolette')
+                .push('colors', {
+                    color: 'brown'
+                })
+                .push('colors', {
+                    color: 'black'
+                });
+            time = new Date().getTime() - time;
 
-        view.then(function(s) {
-            console.log("view full rendered");
-        });
-
-        // context
-        view.push('users', 'Biloud')
-            .push('users', 'Johnny')
-            .del('users.1')
-            .set('users.1', 'Rolette')
-            .push('colors', {
-                color: 'brown'
-            })
-            .push('colors', {
-                color: 'black'
-            });
-        time = new Date().getTime() - time;
-
-        console.timeEnd("test");
-        view.set('users.0', 'followed each : ' + time)
+            console.timeEnd("test");
+            view.set('users.0', 'followed each : ' + time)
+        } catch (e) {
+            console.log("error ", e, e.stack);
+        }
     }
 
     function load() {
@@ -358,7 +365,7 @@
 
             var view = new y.View()
                 .route('/campaign/s:id/?q:query') // should hide/show node if route match or not
-                .load('campaign', 'campaign::{{ $route.id }}|{{ $route.query }}') // should load only if variables are all defined (here 'id')
+                .load('campaign', 'campaign::{{ $route.id + ($route.query || "" )}}') // should load only if variables are all defined (here 'id')
                 .h(1, '{{ campaign.title }}')
                 .p('{{ campaign.id }}')
                 .mount('#mocha');
@@ -378,6 +385,107 @@
                 .p('error', y().visible('$error.title'))
                 .mount('#mocha');
 
+        } catch (e) {
+            console.log("error : ", e, e.stack);
+        }
+    }
+
+    function testNewFunc() {
+        try {
+
+            var parent = new y.Context({
+                data: {
+                    title: 'fooooo'
+                }
+            });
+
+            var context = new y.Context({
+                parent: parent,
+                data: {
+                    title: 'hello',
+                    index: 2,
+                    sum: 3
+                }
+            });
+
+
+
+            var raw = "{{ $.Math.cos(2) * (index+$this.sum) + title + $parent.title + 'hello' }}";
+
+            //console.time("compile");
+            var time = new Date().getTime();
+            // for (var i = 0; i < 10000; ++i) {
+            var xpr = y.interpolable(raw);
+            // }
+            time = new Date().getTime() - time;
+
+            console.log("xpr :", time, xpr);
+
+            var time = new Date().getTime();
+            // for (var i = 0; i < 10000; ++i) {
+            var r = xpr.output(context);
+            // }
+            time = new Date().getTime() - time;
+            // console.log('xpr :  ', time, xpr, f.call(context.data, context, typeof window !== 'undefined' ? window : global));
+            // console.log('xpr :  ', time, xpr);
+            console.log("r : ", time, r);
+
+        } catch (e) {
+            console.log("error ", e, e.stack)
+        }
+        //  alert(time + " - " + f.call(context.data, context, typeof window !== 'undefined' ? window : global));
+        // console.timeEnd("compile");
+
+        /*
+        console.time("t");
+        for (var i = 0; i < 1000; ++i)
+          var r = func.call(context.data, context, typeof window !== 'undefined' ? window : global)
+        console.timeEnd("t");
+
+        console.log(r)
+        */
+    }
+
+    function expression() {
+        try {
+            var parent = new y.Context({
+                data: {
+                    foo: 'bar'
+                }
+            });
+
+            var view = new y.View({
+                    parent: parent
+                })
+                .set('title', 'aaa@vbb.com')
+                .set('reu', 'feeee')
+                .set('deca', function(arg) {
+                    return '-hello-' + arg;
+                })
+                .p('{{ title + deca(true) + $parent.foo + $this.reu + "---" + $.Math.random() }}')
+                .mount('#mocha')
+                .set('title', 'roooo')
+                .set('reu', 'lollipop');
+
+        } catch (e) {
+            console.log("error : ", e, e.stack);
+        }
+    }
+
+
+    function dependent() {
+        try {
+            var view = new y.View()
+                // .set('title', 'hello world')
+                .set('foo', 'bar-')
+                .set('zoo', 'flup-')
+                .dependent('bloupi', ['foo', 'title'], function(foo, title) {
+                    return this.get('zoo') + foo + title;
+                })
+                .p('{{ bloupi + "-waaaaaaa" }}')
+                .mount('#mocha')
+                .set('title', 'reu')
+                .set('foo', 'ploupiloup');
         } catch (e) {
             console.log("error : ", e, e.stack);
         }
