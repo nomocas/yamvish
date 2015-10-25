@@ -264,7 +264,7 @@
                     color: 'piretre'
                 }])
                 .set('selectedColor', '')
-                .rqlView('colors', 'colorsView', 'color=match={{ selectedColor }}&sort(-color)')
+                .rql('colors', 'colorsView', 'color=match={{ selectedColor }}&sort(-color)')
                 // template
                 .h(1, '{{ title }}')
                 .input('text', '{{ users.1 }}')
