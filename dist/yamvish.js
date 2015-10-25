@@ -6,47 +6,37 @@
 				still data-*
 			from String 				OK
 
-		 .disabled
+		 .disabled 						OK
 
-		if('!initialised', ..., ...) 		// almost done
+		if('!initialised', ..., ...) 		OK
 
 		integrate filters and expressions
 
 		request and c3po-bridge 			OK
 
-		model validation  
+		model validation  					OK
 
-		route
+		route 								OK	
 
-		views pool
+		views pool 							OK		
 
 		collection filtering view 				OK
 
 		.client( t1, t2, ...)
 		.server(t1, t2, ...)
 
-		promise management : catch end render / load
+		promise management : catch end render / load 		OK
 		
 		mount/umount event 						OK
 
-		EAch : children  : place els in Virtual Node (could be many)
-			==> is natural : no need... each node has it's own dom element    	OK
-		//______________________
-		y.dependent('bloupi', 'foo', function(bloupi, foo){});
+		y.dependent('bloupi', 'foo', function(bloupi, foo){});				OK
 		
-		==> a dependent function should only be a value in context.data
-			that is registred to dependencies (as a Interpolable)
 
 		y.applyToDOM(node | selector, template)		==> apply template on dom element (select it if selector)
 
 		eventListeners : click(addUser(user)) : should retrieve user before feeding addUser
 
 
-
-
-	Parser : 
-		split html texts in static/interpolable atoms
-		interpret with new Function() to allow complexe expression
 
 	Should :
 
@@ -56,20 +46,7 @@
 		for each template handler : 
 		add args in queue (through done) and place inner functions outside : no more closure
 
-	Context with * 					OK
-
-		could register to path.*
-		and receive the * as key  +  value
-		then items[key].reset(value)
-
-
 	Eacher : 
-
-		hybrid structure ?												OK
-			virtual that could contains real DOM node in childNodes
-
-		associate to real DOMNode that execute 'each' the virtual node that hold children  		OK
-
 		==> maybe introduce special token/tag/comment for each/filter/sort 
 			=> it resolves the html/js template equivalence
 		e.g. 
@@ -112,12 +89,12 @@
 
 
 // core
-var utils = require('./lib/utils');
 var y = function(t) {
 	return new y.Template(t);
 };
-y.isServer = utils.isServer;
-y.utils = utils;
+y.env = require('./lib/env');
+y.utils = require('./lib/utils');
+//y.AsyncManager = require('./lib/async');
 y.Context = require('./lib/context');
 y.Template = require('./lib/template');
 y.PureNode = require('./lib/pure-node');
@@ -128,31 +105,115 @@ var interpolable = require('./lib/interpolable');
 y.interpolable = interpolable.interpolable;
 y.Interpolable = interpolable.Interpolable;
 
+/*
 // parsers
 y.elenpi = require('elenpi');
 y.dom = require('./lib/parsers/dom-to-template');
-y.html = require('./lib/parsers/html-to-template');
-// y.expression = require('./lib/parsers/expression');
-
+y.html = require('./lib/parsers/html-string-to-template');
+*/
+/*
 // Plugins 
 var router = require('./plugins/router');
 for (var i in router)
 	y[i] = router[i];
-y.c3po = require('./plugins/c3po-bridge');
+y.c3po = require('./plugins/loader');
 y.rql = require('./plugins/rql');
 y.aright = require('./plugins/validation');
-
+y.http = require('./plugins/http-request');
+y.uploadForm = require('./plugins/form-uploader');
+y.dateFormat = require('./plugins/date.format');
+*/
 //________________________________________________ END VIEW
-
-y.mainContext = null;
-y.components = {};
-y.addComponent = function(name, template /* or view instance */ ) {
-	y.components[name] = template;
-};
 
 module.exports = y;
 
-},{"./lib/container":2,"./lib/context":3,"./lib/interpolable":6,"./lib/parsers/dom-to-template":7,"./lib/parsers/html-to-template":10,"./lib/pure-node":11,"./lib/template":12,"./lib/utils":13,"./lib/view":14,"./lib/virtual":15,"./plugins/c3po-bridge":23,"./plugins/router":24,"./plugins/rql":25,"./plugins/validation":26,"elenpi":18}],2:[function(require,module,exports){
+
+
+/*
+	Polyfills : 
+
+	https://github.com/LuvDaSun/xhr-polyfill
+	es6-promise or promis
+
+
+ */
+
+},{"./lib/container":3,"./lib/context":4,"./lib/env":6,"./lib/interpolable":8,"./lib/pure-node":11,"./lib/template":12,"./lib/utils":13,"./lib/view":14,"./lib/virtual":15}],2:[function(require,module,exports){
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
+var AsyncManager = function() {
+	this._asyncCount = 0;
+	this._errors = [];
+	this._successes = [];
+	this._fails = [];
+	this._callbacks = [];
+	this._ids = new Date().valueOf();
+};
+
+function remove(mgr) {
+	mgr._asyncCount--;
+	if (mgr._asyncCount <= 0)
+		trigger(mgr);
+}
+
+function trigger(mgr) {
+	var list = mgr._errors.length ? mgr._fails : mgr._successes,
+		args = mgr._errors.length ? mgr._errors : true;
+
+	for (var i = 0; i < mgr._callbacks.length; i++) // call as event handler
+		mgr._callbacks[i](args);
+
+	for (var j = 0; j < list.length; j++)
+		list[j](args);
+	mgr._successes = [];
+	mgr._fails = [];
+	mgr._errors = [];
+}
+
+AsyncManager.prototype = {
+	waiting: function(promise) {
+		this._asyncCount++;
+		var self = this;
+		if (this.parent && this.parent.waiting)
+			this.parent.waiting(promise);
+		return promise.then(function(s) {
+			remove(self);
+			return s;
+		}, function(e) {
+			console.log('async waiting error : ', e);
+			self._errors.push(e);
+			remove(self);
+			throw e;
+		});
+	},
+	delay: function(func, ms) {
+		var self = this;
+		this._asyncCount++;
+		if (this.parent && this.parent.delay)
+			this.parent.delay(function() {}, ms);
+		return setTimeout(function() {
+			func();
+			remove(self);
+		}, ms);
+	},
+	onDone: function(callback) {
+		this._callbacks.push(callback);
+		return this;
+	},
+	then: function(func, fail) {
+		var self = this;
+		if (this._asyncCount === 0)
+			return Promise.resolve(true);
+		return new Promise(function(resolve, reject) {
+				self._successes.push(resolve);
+				self._fails.push(reject);
+			})
+			.then(func, fail);
+	}
+};
+
+module.exports = AsyncManager;
+
+},{}],3:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -167,7 +228,7 @@ function Container(opt /*tagName, context*/ ) {
 	this.__yContainer__ = true;
 	this.parent = opt.parent;
 	this.childNodes = [];
-	this.promises = [];
+	this._promises = [];
 	PureNode.call(this, opt);
 };
 
@@ -215,30 +276,25 @@ Container.prototype  = {
 		if (this.childNodes)
 			for (var i = 0; i < this.childNodes.length; i++)
 				utils.destroyElement(this.childNodes[i], true);
-		this.childNodes = undefined;
-		this.context = undefined;
-		this.mountPoint = undefined;
-		this.mountSelector = undefined;
+		this.childNodes = null;
+		this.context = null;
+		this.mountPoint = null;
+		this.mountSelector = null;
+	},
+	hide: function() {
+		this.childNodes.forEach(function(child) {
+			child.style.display = 'none';
+		});
+	},
+	show: function() {
+		this.childNodes.forEach(function(child) {
+			child.style.display = '';
+		});
 	},
 	then: function(success, error) {
-		if (this.promises.length) {
-			this.promise = Promise.all(this.promises);
-			this.promises = [];
-			return this.promise.then(success, error);
-		}
 		if (this.promise)
 			return this.promise.then(success, error);
-		return Promise.resolve([]).then(success, error);
-	},
-	'catch': function(error) {
-		if (this.promises.length) {
-			this.promise = Promise.all(this.promises);
-			this.promises = [];
-			return this.promise['catch'](error);
-		}
-		if (this.promise)
-			return this.promise['catch'](error);
-		return Promise.resolve([]);
+		return Promise.resolve(this).then(success);
 	}
 };
 
@@ -262,17 +318,17 @@ Container.prototype.removeChild = function(child) {
 
 module.exports = Container;
 
-},{"./emitter":4,"./pure-node":11,"./utils":13}],3:[function(require,module,exports){
+},{"./emitter":5,"./pure-node":11,"./utils":13}],4:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
-var utils = require('./utils');
+var utils = require('./utils'),
+	AsyncManager = require('./async');
 //_______________________________________________________ DATA BIND CONTEXT
 
 function Context(opt /*data, handlers, parent, path*/ ) {
 	opt = opt || {};
 	this.data = (opt.data !== undefined) ? opt.data : {};
 	this.parent = opt.parent;
-	this.handlers = opt.handlers || {};
 	this.map = {};
 	this.path = opt.path;
 	var self = this;
@@ -281,6 +337,7 @@ function Context(opt /*data, handlers, parent, path*/ ) {
 		this._binds.push(this.parent.subscribe(opt.path, function(type, path, value) {
 			self.reset(value);
 		}));
+	AsyncManager.call(this, opt);
 }
 
 Context.prototype = {
@@ -292,28 +349,33 @@ Context.prototype = {
 		this._binds = null;
 		this.parent = null;
 		this.data = null;
-		this.handlers = null;
 		this.map = null;
 	},
-	dependent: function(path, args, func) {
+	dependent: function(path, dependencies, func) {
 		var argsOutput = [],
 			willFire,
 			self = this;
-		for (var i = 0, len = args.length; i < len; ++i) {
+		for (var i = 0, len = dependencies.length; i < len; ++i) {
 			// subscribe to arguments[i]
-			(this.binds = this.binds || []).push(this.subscribe(args[i], function(type, p, value, key) {
+			(this.binds = this.binds || []).push(this.subscribe(dependencies[i], function(type, p, value, key) {
 				if (!willFire)
-					willFire = setTimeout(function() {
+					willFire = self.delay(function() {
 						if (willFire) {
-							var argsOutput = [];
-							for (var i = 0, len = args.length; i < len; ++i)
-								argsOutput.push(self.get(args[i]));
 							willFire = null;
+							var argsOutput = [];
+							for (var i = 0, len = dependencies.length; i < len; ++i) {
+								var depPath = dependencies[i];
+								if (key === depPath)
+									argsOutput.push(value);
+								else
+									argsOutput.push(self.get(depPath));
+							}
+							// console.log('dependent update : ', argsOutput, func.apply(self, argsOutput));
 							self.set(path, func.apply(self, argsOutput));
 						}
 					}, 0);
 			}));
-			argsOutput.push(this.get(args[i]));
+			argsOutput.push(this.get(dependencies[i]));
 		}
 		this.set(path, func.apply(this, argsOutput));
 		return this;
@@ -456,8 +518,11 @@ Context.prototype = {
 		space = space ||  this.map;
 		value = (arguments.length < 2) ? this.data : value;
 		if (space._listeners)
-			for (var i = 0, len = space._listeners.length; i < len; ++i)
-				space._listeners[i](type, path, value, index);
+			for (var i = 0, len = space._listeners.length; i < len; ++i) {
+				var r = space._listeners[i](type, path, value, index);
+				if (r && r.then)
+					this.waiting(r);
+			}
 		if (type !== 'push' && type !== 'removeAt')
 			for (var j in space) {
 				if (j === '_listeners' || j === '_upstreams')
@@ -477,11 +542,11 @@ Context.prototype = {
 		for (var len = path.length; i < len; ++i) {
 			star = space['*'];
 			if (star && star._upstreams)
-				notifyUpstreams(star, type, path, value, index);
+				notifyUpstreams.call(this, star, type, path, value, index);
 			if (!(space = space[path[i]]))
 				break;
 			if (space._upstreams)
-				notifyUpstreams(space, type, path, value, index);
+				notifyUpstreams.call(this, space, type, path, value, index);
 		}
 		if (star)
 			this.notifyAll(type, path, star, value, index);
@@ -491,27 +556,34 @@ Context.prototype = {
 	},
 	setAsync: function(path, promise) {
 		var self = this;
-		return promise.then(function(s) {
+		return this.waiting(promise.then(function(s) {
 			self.set(path, s);
+			return s;
 		}, function(e) {
 			console.error('error while Context.setAsync : ', e);
 			throw e;
-		});
+		}));
 	}
 };
 
+utils.mergeProto(AsyncManager.prototype, Context.prototype);
 
 function notifyUpstreams(space, type, path, value, index) {
-	for (var i = 0, len = space._upstreams.length; i < len; ++i)
-		space._upstreams[i](type, path, value, index);
+	for (var i = 0, len = space._upstreams.length; i < len; ++i) {
+		var r = space._upstreams[i](type, path, value, index);
+		if (r && r.then)
+			this.waiting(r);
+	}
 }
 
 module.exports = Context;
 
-},{"./utils":13}],4:[function(require,module,exports){
+},{"./async":2,"./utils":13}],5:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 /**
+ * Event Emitter
+ * 
  * Directly inspired from : https://github.com/jeromeetienne/microevent.js
  * Just renamed API as browser standards and remove mixins
  */
@@ -539,38 +611,40 @@ Emitter.prototype = {
 };
 module.exports = Emitter;
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
+var env = function() {
+	return Promise.context || env.global;
+};
+
+env.global = {
+	isServer: (typeof window === 'undefined') && (typeof document === 'undefined'),
+	debug: false,
+	templates: {},
+	views: {},
+	rootContext: null
+};
+
+module.exports = env;
+
+},{}],7:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 /**
- * addslashes
+addslashes
 capitalize
-date
 default
 escape
 first
-groupBy
-join
-json
 last
-lower
 raw
 replace
-reverse
 safe
-sort
 striptags
 title
 uniq
-upper
 url_encode
 url_decode
-
-Incode Filter Usage
-y.filter('my value').lower().date('yy/mm/dd');
  */
-
-var utils = require('./utils');
 
 //_______________________________________________________ TEMPLATE
 
@@ -580,42 +654,53 @@ function Filter(f) {
 
 Filter.prototype = {
 	//_____________________________ APPLY filter ON something
-	call: function(callee, context) {
-		return utils.execFilterQueue(callee, this._queue, context);
+	call: function(callee, input) {
+		for (var i = 0, len = this._queue.length; i < len; ++i)
+			input = this._queue[i].call(callee, input);
+		return input;
 	},
 	//_____________________________ BASE Filter handler (every template handler is from one of those two types (done or catch))
-	done: function(callback) {
-		this._queue.push({
-			type: 'done',
-			fn: callback
+	lower: function() {
+		this._queue.push(function(input) {
+			return input.toLowerCase();
 		});
 		return this;
 	},
-	lower: function() {
-		return this.done(function(input) {
-			return input.toLowerCase();
+	upper: function() {
+		this._queue.push(function(input) {
+			return input.toUpperCase();
 		});
+		return this;
 	},
-	date: function(format) {
-		// use dateFormat from http://blog.stevenlevithan.com/archives/date-time-format
-		// ensure it is loaded before use
-		return this.done(function(input) {
-			return new Date(input).format(format);
+	reverse: function() {
+		this._queue.push(function(input) {
+			return input.reverse();
 		});
+		return this;
+	},
+	join: function(sep) {
+		this._queue.push(function(input) {
+			return input.join(sep);
+		});
+		return this;
+	},
+	json: function(pretty) {
+		this._queue.push(function(input) {
+			return JSON.stringify.apply(JSON, pretty ? [input, null, ' '] : [input]);
+		});
+		return this;
 	}
 };
 
 
 module.exports = Filter;
 
-},{"./utils":13}],6:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 (function (global){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-
-var _all = /true|false|null|\$\.(?:[a-zA-Z]\w*(?:\.\w*)*)|\$this(?:\.\w*)*|\$parent(?:\.\w*)+|\$(?:[a-zA-Z]\w*(?:\.\w*)*)|"[^"]*"|'[^']*'|[a-zA-Z_]\w*(?:\.\w*)*/g,
-	_startThis = /^\$this/,
-	_startParent = /^\$parent/,
-	_arrayAccess = /\.(\d+)/g;
+var env = require('./env'),
+	Filter = require('./filter'),
+	replacementRegExp = /true|false|null|\$\.(?:[a-zA-Z]\w*(?:\.\w*)*)|\$this(?:\.\w*)*|\$parent(?:\.\w*)+|\$(?:[a-zA-Z]\w*(?:\.\w*)*)|"[^"]*"|'[^']*'|[a-zA-Z_]\w*(?:\.\w*)*/g;
 
 function toFunc(expr) {
 	// console.log('xpr : ', expr);
@@ -623,18 +708,21 @@ function toFunc(expr) {
 }
 
 function tryExpr(func, context) {
+	if (!context)
+		throw new Error('context is undefined')
 	try {
 		return func.call(context.data, context, (typeof window !== 'undefined') ? window : global);
 	} catch (e) {
-		console.error(e, env.debug ? e.stack : '');
+		console.error(e, env().debug ? e.stack : '');
 		return '';
 	}
 }
 
-function xpr(string, dependencies) {
-	// console.log('xpr parse : ', string);
-	return toFunc(string.replace(_all, function(whole) {
-
+function xpr(expr, filter, dependencies) {
+	// console.log('xpr parse : ', expr);
+	expr = expr.replace(replacementRegExp, function(whole) {
+		if (whole == 'true' || whole == 'false' ||  whole == 'null')
+			return whole;
 		switch (whole[0]) {
 			case '$':
 				if (whole[1] === '.')
@@ -650,25 +738,62 @@ function xpr(string, dependencies) {
 				dependencies.push(whole);
 				return '__context.get("' + whole + '")';
 		}
-	}));
+	});
+
+	var func = toFunc(expr);
+	if (!filter)
+		return func;
+	var fltr = new Function('Filter', 'return new Filter().' + filter)(Filter);
+
+	return function(__context, __global) {
+		return fltr.call(this, func.call(this, __context, __global));
+	};
 }
 
 function handler(instance, context, func, index, callback) {
 	return function(type, path, newValue) {
-		// console.log('interpolable handler : ', type, path, newValue);
 		if (instance.dependenciesCount === 1) {
 			instance.results[index] = tryExpr(func, context);
 			callback(type, path, instance.output(context));
 		} else if (!instance.willFire)
-			instance.willFire = setTimeout(function() {
+			instance.willFire = context.delay(function() { // allow small time to manage other dependencies update without multiple rerender
 				if (instance.willFire) {
-					instance.results[index] = tryExpr(func, context);
 					instance.willFire = null;
+					instance.results[index] = tryExpr(func, context);
 					callback(type, path, instance.output(context));
 				}
 			}, 0);
 	};
 }
+
+//___________________________________ INSTANCE
+
+var Instance = function(interpolable) {
+	this.outputed = false;
+	this.binds = [];
+	this.results = [];
+	this.willFire = null;
+	this.parts = interpolable.parts;
+	this.dependenciesCount = interpolable.dependenciesCount;
+};
+
+Instance.prototype.output = function(context) {
+	var out = '',
+		odd = true,
+		count = 0;
+	for (var i = 0, len = this.parts.length; i < len; i++) {
+		if (odd)
+			out += this.parts[i];
+		else {
+			out += this.outputed ? this.results[count] : (this.results[count] = tryExpr(this.parts[i].func, context));
+			count++;
+		}
+		odd = !odd;
+	}
+	if (!this.outputed)
+		this.outputed = true;
+	return out;
+};
 
 //_______________________________________________________ INTERPOLABLE
 
@@ -681,50 +806,31 @@ var Interpolable = function(splitted, strict) {
 	this.__interpolable__ = true;
 	this._strict = strict || false;
 	var dp;
-	if (splitted.length === 3 && splitted[0] === "" && splitted[2] === "")
+	if (splitted.length === 5 && splitted[0] === "" && splitted[2] === "")
 		this.directOutput = directOutput;
-
 	// interpolable string
-	this.parts = splitted;
+	this.parts = [];
 	this.dependenciesCount = 0;
-	for (var i = 1, len = splitted.length; i < len; i = i + 2) {
+	var odd = false;
+	for (var i = 0, len = splitted.length; i < len; i++) {
+		odd = !odd;
+		if (odd) {
+			this.parts.push(splitted[i]);
+			continue;
+		}
 		var dp = [];
-		splitted[i] = {
-			func: xpr(splitted[i], dp),
+		this.parts.push({
+			func: xpr(splitted[i], splitted[i + 2], dp),
 			dep: dp
-		};
+		});
+		i += 2;
 		this.dependenciesCount += dp.length;
 	}
 };
+
 Interpolable.prototype = {
-
 	subscribeTo: function(context, callback) {
-		var self = this;
-		var instance = {
-			outputed: false,
-			binds: [],
-			results: [],
-			willFire: null,
-			dependenciesCount: this.dependenciesCount,
-			output: function() {
-				var out = '',
-					odd = true,
-					count = 0;
-				for (var i = 0, len = self.parts.length; i < len; i++) {
-					if (odd)
-						out += self.parts[i];
-					else {
-						out += this.outputed ? this.results[count] : (this.results[count] = tryExpr(self.parts[i].func, context));
-						count++;
-					}
-					odd = !odd;
-				}
-				if (!this.outputed)
-					this.outputed = true;
-				return out;
-			}
-		};
-
+		var instance = new Instance(this);
 		var count = 0;
 		for (var i = 1, len = this.parts.length; i < len; i = i + 2) {
 			var h = handler(instance, context, this.parts[i].func, count, callback),
@@ -733,7 +839,8 @@ Interpolable.prototype = {
 			for (var j = 0, lenJ = dep.length; j < lenJ; j++)
 				instance.binds.push(context.subscribe(dep[j], h));
 		}
-		return function() { // unbind all
+		return function() {
+			// unbind all
 			instance.willFire = null;
 			for (var i = 0; i < instance.binds.length; i++)
 				instance.binds[i]();
@@ -763,7 +870,10 @@ Interpolable.prototype = {
 	}
 };
 
-var splitRegEx = /\{\{(.+?)\}\}/;
+// var splitRegEx2 = /\{\{(.+?)\}\}/;
+
+var splitRegEx = /\{\{\s*(.+?)((?:(?:\s\|\s)(.+?))?)\s*\}\}/;
+
 
 function interpolable(string, strict) {
 	var splitted = string.split(splitRegEx);
@@ -779,7 +889,7 @@ module.exports = {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],7:[function(require,module,exports){
+},{"./env":6,"./filter":7}],9:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 //_______________________________________________________ DOM PARSING
@@ -839,327 +949,10 @@ module.exports = {
 	elementToTemplate: elementToTemplate
 };
 
-},{}],8:[function(require,module,exports){
-/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
+},{}],10:[function(require,module,exports){
+module.exports = /(br|input|img|area|base|col|command|embed|hr|img|input|keygen|link|meta|param|source|track|wbr)/;
 
-var elenpi = require('elenpi/index'),
-	r = elenpi.r,
-	Parser = elenpi.Parser,
-	Filter = require('../filter');
-
-var templateCache = {};
-var filterCache = {};
-
-var rules = {
-	doublestring: r().regExp(/^"([^"]*)"/, false, function(descriptor, cap) {
-		descriptor.arguments.push(cap[1]);
-	}),
-	singlestring: r().regExp(/^'([^']*)'/, false, function(descriptor, cap) {
-		descriptor.arguments.push(cap[1]);
-	}),
-	'float': r().regExp(/^[0-9]*\.[0-9]+/, false, function(descriptor, cap) {
-		descriptor.arguments.push(parseFloat(cap[0], 10));
-	}),
-	integer: r().regExp(/^[0-9]+/, false, function(descriptor, cap) {
-		descriptor.arguments.push(parseInt(cap[0], 10));
-	}),
-	bool: r().regExp(/^(true|false)/, false, function(descriptor, cap) {
-		descriptor.arguments.push((cap[1] === 'true') ? true : false);
-	}),
-
-	args: r().zeroOrOne(null,
-		r()
-		.regExp(/^\s*\(\s*/)
-		.done(function(string, descriptor) {
-			descriptor.arguments = [];
-			return string;
-		})
-		.zeroOrMore(null,
-			r().oneOf(['integer', 'bool', 'singlestring', 'doublestring']),
-			r().regExp(/^\s*,\s*/)
-		)
-		.regExp(/^\s*\)/)
-	),
-
-	//_____________________________________
-	// {{ my.var | filter().filter2(...) }}
-	// {{ my.func(arg, ...) }}
-	expression: r()
-		.done(function(string, descriptor) {
-			descriptor.keys = [];
-			return string;
-		})
-		.space()
-		.oneOrMore(null,
-			r().regExp(/^[\w-_]+/, false, function(descriptor, cap) {
-				descriptor.keys.push(cap[0]);
-			}),
-			r().regExp(/^\s*\.\s*/)
-		)
-		.rule('args')
-		.zeroOrOne(null, r().regExp(/^\s*\|\s*/).rule('filters'))
-		.space(),
-
-	//_____________________________________
-	// filter().filter2(...).filter3.filter4(...)
-	filters: r()
-		.space()
-		.zeroOrMore('filters',
-			r().rule('filter'),
-			r().regExp(/^\s*\.\s*/)
-		)
-		.done(function(string, descriptor) {
-			if (descriptor.filters)
-				descriptor.filters = compile(descriptor.filters, Filter);
-			return string;
-		}),
-
-	filter: r()
-		.regExp(/^[\w-_]+/, false, 'method') // method name
-		.rule('args'),
-
-	//_____________________________________
-	// click('addUser').div(p().h(1,'hello'))
-	templates: r()
-		.space()
-		.zeroOrMore('calls',
-			r().rule('template'),
-			r().regExp(/^\s*\.\s*/)
-		)
-		.done(function(string, descriptor) {
-			var t;
-			if (descriptor.calls)
-				t = compile(descriptor.calls, this.Template);
-			if (t && descriptor.arguments) {
-				descriptor.arguments.push(t);
-				delete descriptor.calls;
-			} else
-				descriptor.calls = t;
-			return string;
-		}),
-
-	template: r()
-		.regExp(/^[\w-_]+/, false, function(descriptor, cap) {
-			descriptor.method = cap[0];
-			descriptor.arguments = [];
-		})
-		.zeroOrOne(null,
-			r()
-			.regExp(/^\s*\(\s*/)
-			.zeroOrMore(null,
-				r().oneOf(['integer', 'bool', 'singlestring', 'doublestring', 'templates']),
-				r().regExp(/^\s*,\s*/)
-			)
-			.regExp(/^\s*\)/)
-		)
-};
-
-var parser = new Parser(rules, 'expression');
-
-function compile(calls, Chainable) {
-	var ch = new Chainable();
-	for (var i = 0, len = calls.length; i < len; ++i) {
-		var call = calls[i];
-		ch[call.method].apply(ch, call.arguments);
-	}
-	return ch;
-}
-
-parser.parseTemplate = function(string) {
-	if (templateCache[string] !== undefined)
-		return templateCache[string].calls;
-	var result = templateCache[string] = parser.parse(string, 'templates');
-	if (result === false)
-		return false;
-	return result.calls;
-};
-
-parser.parseFilter = function(string) {
-	if (filterCache[string] !== undefined)
-		return filterCache[string].filters;
-	var result = filterCache[string] = parser.parse(string, 'filters');
-	if (result === false)
-		return false;
-	return result.filters;
-};
-
-module.exports = parser;
-
-/*
-console.log(y.expression.parse("user.name(12, 'hello') | date('dd-mm-yy').lower", 'expression'));
-console.log(y.expression.parse("user.name(12, 'hello') | date.lower", 'expression'));
-console.log(y.expression.parse("user.name | date('dd-mm-yy').lower"));
-console.log(y.expression.parse("user.name(12, 'hello') | lower", 'expression'));
-console.log(y.expression.parse("date('dd-mm-yy').lower", 'filters'));
-console.log(y.html.parse('<div class="bloupi"></div>'));
-console.log(y.expression.parseTemplate("click ( '12', 14, true, p(2, 4, span( false).p())). div(12345)"));
- */
-
-},{"../filter":5,"elenpi/index":18}],9:[function(require,module,exports){
-/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-
-/**
- * Common HTML5 elenpi rules use din both html-to-template and html-to-virtual parsers
- * @type {[type]}
- */
-var r = require('elenpi').r; // elenpi new rule shortcut
-
-var rules = {
-	// html5 unstrict self closing tags : 
-	openTags: /(br|input|img|area|base|col|command|embed|hr|img|input|keygen|link|meta|param|source|track|wbr)/,
-
-	document: r()
-		.zeroOrMore(null, r().space().rule('comment'))
-		.regExp(/^\s*<!DOCTYPE[^>]*>\s*/i, true)
-		.rule('children')
-		.space(),
-
-	comment: r().regExp(/^<!--(?:.|\n|\r)*?(?=-->)-->/),
-
-	tagEnd: r()
-		// closing tag
-		.regExp(/^\s*<\/([\w-_]+)\s*>/, false, function(descriptor, cap) {
-			if (descriptor.tagName !== cap[1].toLowerCase())
-				throw new Error('tag badly closed : ' + cap[1] + ' - (at opening : ' + descriptor.tagName + ')');
-		}),
-
-	innerScript: r()
-		.done(function(string, descriptor) {
-			var index = string.indexOf('</script>');
-			if (index == -1)
-				throw new Error('script tag badly closed.');
-			if (index)
-				descriptor.scriptContent = string.substring(0, index);
-			return string.substring(index + 9);
-		})
-};
-
-module.exports = rules;
-
-},{"elenpi":18}],10:[function(require,module,exports){
-/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-
-var elenpi = require('elenpi'),
-	r = elenpi.r,
-	Parser = elenpi.Parser,
-	utils = require('../utils.js'),
-	Template = require('../template.js'),
-	expression = require('./expression'),
-	htmlRules = require('./html-common-rules');
-
-var rules = {
-	// tag children
-	children: r()
-		.zeroOrMore(null,
-			r().oneOf([
-				r().space().rule('comment').skip(),
-				r().space().rule('tag'),
-				r().rule('text')
-			])
-		),
-
-	text: r().regExp(/^[^<]+/, false, function(descriptor, cap) {
-		descriptor.text(cap[0]);
-	}),
-
-	tag: r()
-		.regExp(/^<([\w-_]+)\s*/, false, function(descriptor, cap) {
-			descriptor.tagName = cap[1].toLowerCase();
-		})
-		.done(function(string, descriptor) {
-			descriptor._attributesTemplate = new Template();
-			return this.exec(string, descriptor._attributesTemplate, this.rules.attributes);
-		})
-		.oneOf([
-			r().char('>')
-			.done(function(string, descriptor) {
-				// check html5 unstrict self-closing tags
-				if (this.rules.openTags.test(descriptor.tagName))
-					return string; // no children
-
-				if (descriptor.tagName === 'script') // get script content
-					return this.exec(string, descriptor, this.rules.innerScript);
-
-				// get inner tag content
-				descriptor._eachTemplate = new Template();
-				var ok = this.exec(string, descriptor._eachTemplate, this.rules.children); // to _eachTemplate
-				if (ok === false)
-					return false;
-				// close tag
-				return this.exec(ok, descriptor, this.rules.tagEnd);
-			}),
-			// strict self closed tag
-			r().regExp(/^\/>/)
-		])
-		.done(function(string, descriptor) {
-			var eachTemplate = descriptor._eachTemplate,
-				attributesTemplate = descriptor._attributesTemplate;
-			if (eachTemplate)
-				if (!attributesTemplate._hasEach)
-					attributesTemplate._queue = attributesTemplate._queue.concat(eachTemplate._queue);
-				else
-					attributesTemplate._queue.unshift({
-						// small hack to define _eachTemplate in virtual or DOM element before 'each' execution
-						type: 'done',
-						fn: function(string) {
-							this._eachTemplate = eachTemplate;
-							return string;
-						}
-					});
-			descriptor.tag(descriptor.tagName, attributesTemplate);
-			delete descriptor._attributesTemplate;
-			delete descriptor._eachTemplate;
-			delete descriptor.tagName;
-			return string;
-		}),
-
-	attributes: r().zeroOrMore(null,
-		r().regExp(/^([\w-_]+)\s*(?:=(?:"([^"]*)"|([\w-_]+)))?\s*/, false, function(descriptor, cap) {
-			var attrName = cap[1],
-				value = (cap[2] !== undefined) ? cap[2] : ((cap[3] !== undefined) ? cap[3] : '');
-
-			switch (attrName) {
-				case 'class':
-					if (!value)
-						break;
-					value.split(/\s+/).forEach(function(cl) {
-						descriptor.setClass(cl);
-					});
-					break;
-				case 'data-template':
-					if (!value)
-						break;
-					var template = expression.parseTemplate(value);
-					if (template !== false) {
-						descriptor._queue = descriptor._queue.concat(template._queue);
-						descriptor._hasEach = descriptor._hasEach || template._hasEach;
-					} else
-						throw new Error('data-template attribute parsing failed : ' + value);
-					break;
-				case 'id':
-					if (!value)
-						break;
-					descriptor.id(value);
-					break;
-				default:
-					descriptor.attr(attrName, value);
-					break;
-			}
-		})
-	)
-};
-
-rules = utils.merge(htmlRules, rules);
-
-var parser = new Parser(rules, 'children');
-
-parser.createDescriptor = function() {
-	return new Template();
-};
-
-module.exports = parser;
-
-},{"../template.js":12,"../utils.js":13,"./expression":8,"./html-common-rules":9,"elenpi":18}],11:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils');
@@ -1219,8 +1012,8 @@ module.exports = PureNode;
 	"use strict";
 
 	var utils = require('./utils'),
+		env = require('./env'),
 		interpolable = require('./interpolable').interpolable,
-		// expression = require('./parsers/expression'),
 		dom = require('./parsers/dom-to-template'),
 		Virtual = require('./virtual'),
 		PureNode = require('./pure-node'),
@@ -1255,93 +1048,74 @@ module.exports = PureNode;
 		return templ;
 	}
 
-	function execHandler(callee, fn, context, factory, promises, error) {
-		try {
-			fn.call(callee, context, factory, promises, error);
-		} catch (e) {
-			return e;
-		}
-	}
-
-	function execQueue(callee, queue, context, factory, promises, error) {
+	function execQueue(callee, queue, context, factory) {
 		var handler = queue[0],
 			nextIndex = 0,
+			promises = [],
 			r;
 		while (handler) {
 			nextIndex++;
-			if (error) {
-				if (handler.type !== 'catch' || !handler.toElement) {
-					handler = queue[nextIndex];
-					continue;
-				}
-				execHandler(callee, handler.toElement, context, factory, promises, error);
-				return;
-			} else {
-				if (handler.type === 'catch' || !handler.toElement) {
-					handler = queue[nextIndex];
-					continue;
-				}
-				r = execHandler(callee, handler.toElement, context, factory, promises);
+			if (!handler.toElement) {
+				handler = queue[nextIndex];
+				continue;
 			}
-			if (r)
-				error = r;
+			r = handler.toElement.call(callee, context, factory);
+			if (r && r.then)
+				promises.push(r);
 			handler = queue[nextIndex];
 		}
-		if (error)
-			throw error;
+		if (promises.length)
+			if (Promise.length === 1)
+				return promises[0];
+			else
+				return Promise.all(promises);
 	}
 
 	Template.prototype = {
-		call: function(caller, context, factory, promises) {
-			execQueue(caller, this._queue, context, factory || (utils.isServer ? Virtual : document), promises);
+		call: function(caller, context, factory) {
+			return execQueue(caller, this._queue, context, factory || (env().isServer ? Virtual : document));
 		},
-		toElement: function(context, factory, promises) {
-			promises = promises || [];
-			var caller = new Container({
+		toContainer: function(context, factory) {
+			var container = new Container({
 				factory: factory
 			});
-			execQueue(caller, this._queue, context, factory || (utils.isServer ? Virtual : document), promises);
-			if (promises.length)
-				caller.promises = promises;
-			return caller;
+			container.promise = execQueue(container, this._queue, context, factory || (env().isServer ? Virtual : document));
+			return container;
 		},
-		toString: function(context, descriptor, promises) {
+		toString: function(context, descriptor) {
 			descriptor = descriptor ||  new StringOutputDescriptor();
 			for (var i = 0, len = this._queue.length; i < len; ++i)
 				if (this._queue[i].toString)
-					this._queue[i].toString(context, descriptor, promises);
+					this._queue[i].toString(context, descriptor);
 			return descriptor.children;
 		},
 		//_____________________________ BASE Template handler (every template handler is from one of those two types (done or catch))
 		exec: function(toElement, toString) {
 			this._queue.push({
-				type: 'exec',
 				toElement: toElement,
 				toString: (toString === true) ? toElement : toString
 			});
 			return this;
 		},
-		'catch': function(toElement, toString) {
-			this._queue.push({
-				type: 'catch',
-				toElement: toElement,
-				toString: (toString === true) ? toElement : toString
-			});
-			return this;
+		log: function() {
+			var args = arguments;
+			return this.exec(function(context, factory) {
+				console.log.apply(console, args);
+			}, true);
 		},
 		//_____________________________ Conditional branching
 		'if': function(condition, trueCallback, falseCallback) {
 			var type = typeof condition;
 			if (type === 'string')
 				condition = interpolable(condition);
-			return this.exec(function(context, factory, promises) {
+			return this.exec(function(context, factory) {
 				var ok = condition,
 					self = this;
 				var exec = function(type, path, ok) {
 					if (ok)
-						return trueCallback.call(self, context, factory, promises);
+						return trueCallback.call(self, context, factory);
 					else if (falseCallback)
-						return falseCallback.call(self, context, factory, promises);
+						return falseCallback.call(self, context, factory);
 				};
 				if (condition && condition.__interpolable__) {
 					ok = condition.output(context);
@@ -1349,16 +1123,16 @@ module.exports = PureNode;
 				} else if (type === 'function')
 					ok = condition.call(this, context);
 				return exec('set', ok);
-			}, function(context, descriptor, promises) {
+			}, function(context, descriptor) {
 				var ok;
 				if (condition && condition.__interpolable__)
 					ok = condition.output(context);
 				else if (type === 'function')
 					ok = condition.call(this, context);
 				if (ok)
-					return trueCallback.toString(context, descriptor, promises);
+					return trueCallback.toString(context, descriptor);
 				else if (falseCallback)
-					return falseCallback.toString(context, descriptor, promises);
+					return falseCallback.toString(context, descriptor);
 			});
 			return this;
 		},
@@ -1383,11 +1157,6 @@ module.exports = PureNode;
 				context.del(path);
 			}, true);
 		},
-		setHandler: function(name, handler) {
-			return this.exec(function(context) {
-				(context.handlers = context.handlers || {})[name] = handler;
-			});
-		},
 		context: function(value) {
 			var parentPath;
 			if (typeof value === 'string')
@@ -1411,17 +1180,22 @@ module.exports = PureNode;
 			});
 		},
 		with: function(path, template) {
-			return this.exec(function(context, factory, promises) {
+			return this.exec(function(context, factory) {
 				// data, handlers, parent, path
 				var ctx = new Context({
 					data: typeof path === 'string' ? context.get(path) : path,
 					parent: context,
 					path: path
 				})
-				template.call(this, ctx, factory, promises);
+				return template.call(this, ctx, factory);
 			}, function(context, descriptor) {
+				var ctx = new Context({
+					data: typeof path === 'string' ? context.get(path) : path,
+					parent: context,
+					path: path
+				})
 				var newDescriptor = new StringOutputDescriptor();
-				template.toString(context, newDescriptor)
+				template.toString(ctx, newDescriptor)
 				descriptor.attributes += newDescriptor.attributes;
 				if (newDescriptor.style)
 					descriptor.style += newDescriptor.style;
@@ -1502,7 +1276,7 @@ module.exports = PureNode;
 			return this.exec(function(context) {
 				var self = this;
 				if (value.__interpolable__) {
-					if (!utils.isServer)
+					if (!env().isServer)
 						this.addEventListener('input', function(event) {
 							context.set(varPath, event.target.value);
 						});
@@ -1526,7 +1300,7 @@ module.exports = PureNode;
 				this.setAttribute('contenteditable', true);
 				if (value.__interpolable__) {
 					val = context.get(value.directOutput);
-					if (!utils.isServer)
+					if (!env().isServer)
 						this.addEventListener('input', function(event) {
 							self.freeze = true;
 							context.set(value.directOutput, event.target.textContent);
@@ -1619,12 +1393,18 @@ module.exports = PureNode;
 						(this._binds = this._binds || []).push(context.subscribe(flag, function(type, path, newValue) {
 							if (invert)
 								newValue = !newValue;
-							self.style.display = newValue ? initial : 'none';
+							if (self.__yContainer__)
+								newValue ? self.show() : self.hide();
+							else
+								self.style.display = newValue ? initial : 'none';
 						}));
 					}
 					if (invert)
 						val = !val;
-					this.style.display = val ? initial : 'none';
+					if (self.__yContainer__)
+						val ? self.show() : self.hide();
+					else
+						this.style.display = val ? initial : 'none';
 				},
 				// To String
 				function(context, descriptor) {
@@ -1669,18 +1449,21 @@ module.exports = PureNode;
 			}
 			return this.exec(
 				// toElement
-				function(context, factory, promises) {
+				function(context, factory) {
 					var node = factory.createElement(name),
 						promises = [],
 						p;
 					for (var i = 0, len = args.length; i < len; ++i) {
-						p = args[i].call(node, this.childrenContext || context, factory, promises);
+						p = args[i].call(node, this.childrenContext || context, factory);
 						if (p && p.then)
 							promises.push(p);
 					}
 					this.appendChild(node);
 					if (promises.length)
-						return Promise.all(promises);
+						if (promises.length === 1)
+							return promises[0];
+						else
+							return Promise.all(promises);
 				},
 				// toString
 				function(context, descriptor) {
@@ -1725,13 +1508,13 @@ module.exports = PureNode;
 		//___________________________________ EVENTS LISTENER
 		on: function(name, handler) {
 			return this.exec(function(context) {
-				if (utils.isServer)
+				if (env().isServer)
 					return;
 				var h;
 				if (typeof handler === 'string') {
-					if (!context.handlers || !context.handlers[handler])
-						throw utils.produceError('on(' + name + ') : no "' + handler + '" handlers define in current context', this);
-					h = context.handlers[handler];
+					if (!context.data[handler])
+						throw utils.produceError('on(' + name + ') : no "' + handler + '" event handlers define in current context', this);
+					h = context.data[handler];
 				} else
 					h = handler;
 				this.addEventListener(name, function(evt) {
@@ -1749,9 +1532,10 @@ module.exports = PureNode;
 			this._hasEach = true;
 			return this.exec(
 				// toElement
-				function(context, factory, promises) {
+				function(context, factory) {
 					var self = this,
 						template = getEachTemplate(this, templ),
+						promises = [],
 						container = new PureNode();
 					container.childNodes = [];
 					if (this.__yPureNode__)
@@ -1759,7 +1543,7 @@ module.exports = PureNode;
 					else
 						(this._yamvish_containers = this._yamvish_containers || []).push(container);
 
-					function push(value, parent) {
+					function push(value, promises) {
 						var ctx = new Context({
 								data: value,
 								parent: context
@@ -1767,7 +1551,9 @@ module.exports = PureNode;
 							child = new PureNode();
 						child.context = ctx;
 						container.childNodes.push(child);
-						template.call(child, ctx, factory, promises);
+						var p = template.call(child, ctx, factory);
+						if (p && p.then)
+							promises.push(p);
 						return child;
 					}
 
@@ -1779,6 +1565,7 @@ module.exports = PureNode;
 							case 'set':
 								var j = 0,
 									fragment,
+									promises = [],
 									//parent = (!self.__yPureNode__ || self.mountPoint) && (self.mountPoint || self),
 									//showAtEnd = false,
 									nextSibling = (!self.__yPureNode__ || self.mountPoint) ? utils.findNextSibling(container) : null;
@@ -1794,7 +1581,7 @@ module.exports = PureNode;
 									if (container.childNodes[j]) // reset existing
 										container.childNodes[j].context.reset(value[j]);
 									else { // create new node
-										var child = push(value[j]);
+										var child = push(value[j], promises);
 										if ((!self.__yPureNode__ || self.mountPoint) && child.childNodes)
 											utils.mountChildren(child, fragment || self.mountPoint || self, fragment ? null : nextSibling);
 									}
@@ -1816,6 +1603,8 @@ module.exports = PureNode;
 								}
 								// if (showAtEnd)
 								// 	parent.style.display = '';
+								if (promises.length)
+									return Promise.all(promises);
 								break;
 							case 'removeAt':
 								utils.destroyElement(container.childNodes[index], true);
@@ -1823,9 +1612,12 @@ module.exports = PureNode;
 								break;
 							case 'push':
 								var nextSibling = utils.findNextSibling(container),
-									child = push(value);
+									promises = [],
+									child = push(value, promises);
 								if ((!self.__yPureNode__ || self.mountPoint) && child.childNodes)
 									utils.mountChildren(child, self.mountPoint || self, nextSibling);
+								if (promises.length)
+									return promises[0];
 								break;
 						}
 					};
@@ -1835,7 +1627,7 @@ module.exports = PureNode;
 						(this._binds = this._binds || []).push(context.subscribe(path + '.*', function(type, path, value, key) {
 							var node = container.childNodes[key];
 							if (node)
-								node.context.reset(value);
+								return node.context.reset(value);
 						}));
 						data = context.get(path);
 					}
@@ -1858,12 +1650,26 @@ module.exports = PureNode;
 				}
 			);
 		},
-		//__________ STILL TO DO
-		from: function(name) {
-			return this.exec(function(context, factory, promises) {
-
-			}, function(context, descriptor, promises) {
-
+		use: function(name) {
+			return this.exec(function(context, factory) {
+				if (typeof name === 'string') {
+					var envi = env();
+					name = envi.templates[name] || envi.views[name];
+				}
+				if (!name)
+					throw new Error('no template/container found with "' + name + '"');
+				if (name.__yContainer__)
+					return name.mount(this, 'append');
+				else
+					return name.call(this, context, factory);
+			}, function(context, descriptor) {
+				if (typeof name === 'string') {
+					var envi = env();
+					name = envi.templates[name] || envi.views[name];
+				}
+				if (!name)
+					throw new Error('no template/container found with "' + name + '"');
+				return name.toString(this, context, descriptor);
 			});
 		}
 	};
@@ -1887,7 +1693,7 @@ module.exports = PureNode;
 
 })();
 
-},{"./container":2,"./context":3,"./interpolable":6,"./parsers/dom-to-template":7,"./pure-node":11,"./utils":13,"./virtual":15}],13:[function(require,module,exports){
+},{"./container":3,"./context":4,"./env":6,"./interpolable":8,"./parsers/dom-to-template":9,"./pure-node":11,"./utils":13,"./virtual":15}],13:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 //__________________________________________________________ UTILS
@@ -2015,20 +1821,6 @@ function mergeProto(src, target) {
 		target[i] = src[i];
 }
 
-
-
-function execFilterQueue(callee, queue, arg) {
-	var handler = queue[0],
-		nextIndex = 0,
-		r = arg;
-	while (handler) {
-		r = handler.fn.call(callee, r);
-		handler = queue[++nextIndex];
-	}
-	return r;
-}
-
-
 function mountChildren(node, parent, nextSibling) {
 	if (!node.childNodes || !node.__yPureNode__)
 		return;
@@ -2050,7 +1842,6 @@ function mountChildren(node, parent, nextSibling) {
 		}
 }
 
-
 function findNextSibling(node) {
 	var tmp = node;
 	while (tmp && !tmp.__yVirtual__ && tmp.__yPureNode__ && tmp.childNodes && tmp.childNodes.length)
@@ -2060,14 +1851,10 @@ function findNextSibling(node) {
 	return tmp.nextSibling;
 }
 
-
-
 //_______________________________________ EXPORTS
 
 module.exports = {
-	isServer: (typeof window === 'undefined') && (typeof document === 'undefined'),
 	mountChildren: mountChildren,
-	execFilterQueue: execFilterQueue,
 	mergeProto: mergeProto,
 	destroyElement: destroyElement,
 	destroyChildren: destroyChildren,
@@ -2099,6 +1886,7 @@ module.exports = {
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
+	env = require('./env'),
 	Template = require('./template'),
 	Virtual = require('./virtual'),
 	Container = require('./container'),
@@ -2111,23 +1899,28 @@ var View = function View(opt) {
 	this.factory = opt.factory;
 	Context.call(this, opt);
 	Container.call(this, opt);
-	this.promises = [];
 }
 utils.mergeProto(Template.prototype, View.prototype);
-utils.mergeProto(Context.prototype, View.prototype);
 utils.mergeProto(Container.prototype, View.prototype);
+utils.mergeProto(Context.prototype, View.prototype);
 View.prototype.exec = function(fn) {
-	fn.call(this, this, this.factory || (utils.isServer ? Virtual : document), this.promises); // apply directly toElement handler on this
+	var p = fn.call(this, this, this.factory || (env().isServer ? Virtual : document)); // apply directly toElement handler on this
+	if (p && p.then)
+		this.waiting(p);
 	return this;
 };
 View.prototype.destroy = function() {
 	Container.prototype.destroy.call(this);
 	Context.prototype.destroy.call(this);
 };
+// remove API that does not make sens with view
+// view is directly constructed : no call, catch, or toElement
 delete View.prototype['catch'];
 delete View.prototype.call;
 delete View.prototype.toElement;
+// view is a context : could not change it
 delete View.prototype.context;
+// view is a container : no attributes
 delete View.prototype.id;
 delete View.prototype.attr;
 delete View.prototype.setClass;
@@ -2138,19 +1931,22 @@ delete View.prototype.contentEditable;
 
 module.exports = View;
 
-},{"./container":2,"./context":3,"./template":12,"./utils":13,"./virtual":15}],15:[function(require,module,exports){
+},{"./container":3,"./context":4,"./env":6,"./template":12,"./utils":13,"./virtual":15}],15:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
 	Emitter = require('./emitter'),
 	PureNode = require('./pure-node'),
-	openTags = /(br|input|img|area|base|col|command|embed|hr|img|input|keygen|link|meta|param|source|track|wbr)/;
+	openTags = require('./parsers/open-tags');
 
 //_______________________________________________________ VIRTUAL NODE
 
 /**
  * Virtual Node
- * @param {String} tagName the tagName of the virtual node
+ *
+ * A minimal mock of DOMElement. It gathers PureNode and Emitter API and add attributes management (add and remove).
+ * 
+ * @param {Object} option (optional) option object : { ?tagName:String, ?nodeValue:String } + options from PureNode
  */
 function Virtual(opt /*tagName, context*/ ) {
 	opt = opt || {};
@@ -2173,12 +1969,13 @@ Virtual.prototype  = {
 	}
 };
 
+// apply inheritance
 utils.mergeProto(PureNode.prototype, Virtual.prototype);
 utils.mergeProto(Emitter.prototype, Virtual.prototype);
 
 /**
  * Virtual to String output
- * @return {String} the String représentation of Virtual node
+ * @return {String} the String representation of Virtual node
  */
 Virtual.prototype.toString = function() {
 	if (this.tagName === 'textnode')
@@ -2207,12 +2004,15 @@ Virtual.prototype.toString = function() {
 	return node;
 };
 
+
+// Virtual Factory : mimic document.createElement but return a virtual node
 Virtual.createElement = function(tagName) {
 	return new Virtual({
 		tagName: tagName
 	});
 };
 
+// Virtual Factory : mimic document.createTextNode but return a virtual node
 Virtual.createTextNode = function(value) {
 	return new Virtual({
 		tagName: 'textnode',
@@ -2222,1872 +2022,5 @@ Virtual.createTextNode = function(value) {
 
 module.exports = Virtual;
 
-},{"./emitter":4,"./pure-node":11,"./utils":13}],16:[function(require,module,exports){
-/**
- * @author Gilles Coomans <gilles.coomans@gmail.com>
- *
- */
-(function(global) {
-	'use strict';
-
-	var replaceShouldBeRegExp = /%s/g;
-
-	function error(errors, rule, parent, key, path, shouldBe) {
-		if (path && key)
-			path += '.';
-		path = key ? (path + key) : path;
-
-		if (!path)
-			path = '.';
-
-		errors.valid = false;
-		errors.map[path] = errors.map[path] || {
-			value: key ? parent[key] : parent,
-			errors: []
-		};
-		var msg = i18n(rule);
-		if (!msg)
-			msg = 'missing error message for ' + rule;
-		if (shouldBe)
-			msg = msg.replace(replaceShouldBeRegExp, shouldBe);
-		errors.map[path].errors.push(msg);
-		return false;
-	}
-
-	var i18n = function(rule, language) {
-		var space = i18n.data[language || i18n.currentLanguage];
-		return space[rule];
-	};
-
-	i18n.currentLanguage = 'en';
-	i18n.data = {
-		en: {
-			string: "should be a string",
-			object: "should be an object",
-			array: "should be an array",
-			'boolean': "should be a boolean",
-			number: "should be a number",
-			'null': "should be null",
-			'enum': "enum failed (should be one of : %s)",
-			equal: "equality failed (should be : %s)",
-			format: "format failed",
-			unmanaged: "unmanaged property",
-			missing: "missing property",
-			minLength: "too short (length should be at least : %s)",
-			maxLength: "too long (length should be at max : %s)",
-			minimum: "too small (should be at minimum : %s)",
-			maximum: "too big (should be at max : %s)"
-		}
-	};
-
-	var formats = {
-		email: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}$/i
-	};
-
-	function is(type) {
-		return function() {
-			return this.exec('this', function(input, path) {
-				if (typeof input !== type)
-					return error(this, type, input, null, path, type);
-				return true;
-			});
-		};
-	}
-
-	function prop(type) {
-		return function(name, rule) {
-			return this.exec(name, function(input, path) {
-				if (typeof input[name] === 'undefined') {
-					if (!rule || rule.required !== false)
-						return error(this, 'missing', input, name, path);
-					return true;
-				}
-				if (typeof input[name] !== type)
-					return error(this, type, input, name, path, type);
-				if (!rule)
-					return true;
-				return rule.call(this, input[name], path ? (path + '.' + name) : name);
-			});
-		};
-	}
-
-	//_______________________________ VALIDATOR
-
-	var Validator = function() {
-		this._rules = {};
-	};
-
-	Validator.prototype = {
-		validate: function(input) {
-			var errors = {
-				valid: true,
-				map: {}
-			};
-			this.call(errors, input, '');
-			if (errors.valid)
-				return true;
-			errors.value = input;
-			return errors;
-		},
-		call: function(errors, entry, path) {
-			var ok = true;
-
-			if (this.required !== false && typeof entry === 'undefined')
-				return error(errors, 'missing', entry, null, path);
-
-			if (this._rules['this'])
-				this._rules['this'].forEach(function(rule) {
-					ok = ok && rule.call(errors, entry, path);
-				});
-
-			if (!ok)
-				return false;
-
-			if (typeof entry !== 'object' || entry.forEach)
-				return ok;
-
-			var keys = {},
-				i;
-			for (i in entry)
-				keys[i] = true;
-
-			for (i in this._rules)
-				if (i === 'this')
-					continue;
-				else {
-					var k = this._rules[i].call(errors, entry, path);
-					keys[i] = false;
-					ok = ok && k;
-				}
-
-			for (i in keys)
-				if (keys[i])
-					ok = error(errors, 'unmanaged', entry, i, path);
-			return ok;
-		},
-		exec: function(key, rule) {
-			if (typeof rule === 'string')
-				rule = rules[rule];
-			if (key === 'this')
-				(this._rules[key] = this._rules[key] || []).push(rule);
-			else
-				this._rules[key] = rule;
-			return this;
-		},
-		rule: function(key, rule) {
-			if (!rule) {
-				rule = key;
-				key = null;
-			}
-			if (typeof rule === 'string')
-				rule = rules[rule];
-			return this.exec(key || 'this', function(input, path) {
-				input = key ? input[key] : input;
-				if (key)
-					path = path ? (path + '.' + key) : key;
-				return rule.call(this, input, path);
-			});
-		},
-		// ___________________________________ 
-		required: function(yes) {
-			this.required = yes;
-			return this;
-		},
-		minLength: function(min) {
-			return this.exec('this', function(input, path) {
-				if (input.length < min)
-					return error(this, 'minLength', input, null, path, min);
-				return true;
-			});
-		},
-		maxLength: function(max) {
-			return this.exec('this', function(input, path) {
-				if (input.length > max)
-					return error(this, 'maxLength', input, null, path, max);
-				return true;
-			});
-		},
-		minimum: function(min) {
-			return this.exec('this', function(input, path) {
-				if (input < min)
-					return error(this, 'minimum', input, null, path, min);
-				return true;
-			});
-		},
-		maximum: function(max) {
-			return this.exec('this', function(input, path) {
-				if (input > max)
-					return error(this, 'maximum', input, null, path, max);
-				return true;
-			});
-		},
-		format: function(exp) {
-			if (typeof exp === 'string')
-				exp = formats[exp];
-			return this.exec('this', function(input, path) {
-				if (!exp.test(input))
-					return error(this, 'format', input, null, path);
-				return true;
-			});
-		},
-		enumerable: function(values) {
-			return this.exec('this', function(input, path) {
-				if (values.indexOf(input) === -1)
-					return error(this, 'enum', input, null, path, values.join(', '));
-				return true;
-			});
-		},
-		item: function(rule) {
-			return this.exec('this', function(input, path) {
-				var self = this,
-					index = 0,
-					ok = true;
-				input.forEach(function(item) {
-					ok = ok && rule.call(self, item, path + '.' + (index++));
-				});
-				return ok;
-			});
-		},
-		equal: function(value) {
-			return this.exec('this', function(input, path) {
-				if (input !== value)
-					return error(this, 'equal', input, name, path, value);
-			});
-		},
-
-		isObject: is('object'),
-		object: prop('object'),
-		isString: is('string'),
-		string: prop('string'),
-		func: prop('function'),
-		bool: prop('boolean'),
-		number: prop('number'),
-
-		isArray: function() {
-			return this.exec('this', function(input, path) {
-				if (typeof input !== 'object' && !input.forEach)
-					return error(this, 'array', input, null, path);
-				return true;
-			});
-		},
-		isNull: function() {
-			return this.exec('this', function(input, path) {
-				if (input !== null)
-					return error(this, 'null', input, null, path);
-				return true;
-			});
-		},
-		'null': function(name) {
-			return this.exec(name, function(input, path) {
-				if (input[name] !== null)
-					return error(this, 'null', input, name, path);
-				return true;
-			});
-		},
-		array: function(name, rule) {
-			return this.exec(name, function(input, path) {
-				if (typeof input[name] === 'undefined') {
-					if (!rule || rule.required !== false)
-						return error(this, 'missing', input, name, path);
-					return true;
-				}
-				if (typeof input[name] !== 'object' && !input[name].forEach)
-					return error(this, 'array', input, name, path);
-				if (!rule)
-					return true;
-				return rule.call(this, input[name], path ? (path + '.' + name) : name);
-			});
-		}
-	};
-
-	var v = function() {
-		return new Validator();
-	};
-
-	var rules = {
-		email: v().isString().format('email').minLength(6)
-	};
-
-	var aright = {
-		v: v,
-		Validator: Validator,
-		rules: rules,
-		i18n: i18n,
-		formats: formats
-	};
-
-	if (typeof module !== 'undefined' && module.exports)
-		module.exports = aright;
-	else
-		global.aright = aright;
-})(this);
-
-},{}],17:[function(require,module,exports){
-/**
- * c3po : Lightweight but powerful protocols manager.
- *  
- * Aimed to be used both sides (server side and/or browser side) to give real isomorphic approach when designing object that need ressources.
- * 
- * @author Gilles Coomans <gilles.coomans@gmail.com>
- * @licence MIT
- */
-(function(define) {
-	"use strict";
-	define("c3po", [], function() {
-		var parser = /^([\w-]+)(?:\.([\w-]+)(?:\(([^\)]*)\))?)?::([^$]*)/;
-
-		function parseRequest(request, obj) {
-			var match = parser.exec(request);
-			if (match) {
-				obj.protocol = match[1];
-				obj.method = match[2] || "get";
-				obj.args = match[3] ? match[3].split(",")
-					.map(function(arg) {
-						return arg.trim();
-					}) : null;
-				obj.pointer = match[4];
-				obj.interpolable = c3po.interpolator ? c3po.interpolator.isInterpolable(obj.pointer) : false;
-			}
-		}
-
-		var Request = function(request) {
-			this.__c3po__ = true;
-			this.original = request;
-			if (request && request[0] === '<')
-				return;
-			parseRequest(request, this);
-		};
-
-		function exec(protocol, self, args) {
-			if (!protocol[self.method])
-				throw new Error("there is no method named " + self.method + " in protocol " + self.protocol + "!");
-			return protocol[self.method].apply(protocol, args);
-		}
-
-		function getProtocol(name) {
-			if (typeof name === 'string') {
-				var protocol;
-				// first : look in contextualised namespace if any
-				if (c3po.fromGlocal)
-					protocol = c3po.fromGlocal(name);
-				// or look in global namespace
-				if (!protocol)
-					protocol = c3po.protocols[name];
-				if (!protocol)
-					throw new Error("no protocol found with : ", name);
-				return protocol;
-			}
-			return name;
-		}
-
-		function initialiseProtocol(protocol) {
-			return new Promise(function(resolve, reject) {
-				var promise = protocol.initialising ? protocol.initialising : protocol.init();
-				if (promise && typeof promise.then === 'function') {
-					// promised init case
-					protocol.initialising = promise.then(function() {
-						protocol.initialising = null;
-						protocol.initialised = true;
-						resolve(protocol);
-					}, reject);
-				} else {
-					protocol.initialised = true;
-					resolve(protocol);
-				}
-			});
-		}
-
-		Request.prototype = {
-			exec: function(options, context) {
-				if (!this.protocol)
-					return Promise.resolve(this.original);
-				options = options || options;
-				var protocol = c3po.protocol(this.protocol),
-					uri = (this.interpolable && c3po.interpolator && context) ? c3po.interpolator.interpolate(this.pointer, context) : this.pointer,
-					self = this,
-					args = this.args ? [].concat(this.args, uri, options) : [uri, options];
-				return protocol.then(function(protocol) {
-					return exec(protocol, self, args);
-				});
-			}
-		};
-		var c3po = {
-			Request: Request,
-			requestCache: null, // simply set to {} to allow caching
-			protocols: {
-				dummy: { // dummy:: protocol for test and demo
-					get: function(url) {
-						return {
-							dummy: url
-						};
-					}
-				}
-			},
-			fromGlocal: null, // to use contextualised protocols namespace. 
-			interpolator: null, // to allow request interpolation on get
-			protocol: function(name) {
-				return new Promise(function(resolve, reject) {
-					var protocol = getProtocol(name);
-					// manage flattener
-					if (protocol._deep_flattener_ && !protocol._deep_flattened_)
-						return (protocol._deep_flattening_ ? protocol._deep_flattening_ : protocol.flatten())
-							.then(c3po.protocol)
-							.then(resolve, reject);
-					// manage ocm resolution
-					if (protocol._deep_ocm_)
-						protocol = protocol();
-					// manage initialisation if needed
-					if (protocol.init && !protocol.initialised)
-						return initialiseProtocol(protocol).then(resolve, reject);
-					resolve(protocol);
-				});
-			},
-			get: function(request, options, context) {
-				if (!request.__c3po__) {
-					if (this.requestCache && this.requestCache[request])
-						request = this.requestCache[request];
-					else {
-						request = new Request(request);
-						if (this.requestCache)
-							this.requestCache[request.original] = request;
-					}
-				}
-				return request.exec(options, context);
-			},
-			getAll: function(requests, options, context) {
-				return Promise.all(requests.map(function(request) {
-					return c3po.get(request, options, context);
-				}));
-			}
-		};
-
-		// module.exports = c3po;
-		return c3po;
-	});
-})(typeof define !== 'undefined' ? define : function(id, deps, factory) { // AMD/RequireJS format if available
-	if (typeof module !== 'undefined')
-		module.exports = factory(); // CommonJS environment
-	else if (typeof window !== 'undefined')
-		window[id] = factory(); // raw script, assign to c3po global
-	else
-		console.warn('"%s" has not been mounted somewhere.', id);
-});
-
-},{}],18:[function(require,module,exports){
-/**
- * Todo :
- * - oneOf : add optional flag
- * - add string 'arg and return' management in regExp handlers
- */
-(function() {
-    var defaultSpaceRegExp = /^[\s\n\r]+/;
-
-    function exec(string, rule, descriptor, parser, opt) {
-        if (typeof rule === 'string')
-            rule = parser.rules[rule];
-        var rules = rule._queue;
-        for (var i = 0, len = rules.length; i < len /*&& string*/ ; ++i) {
-            var current = rules[i];
-            if (current.__lexer__)
-                string = exec(string, current, descriptor, parser, opt);
-            else // is function
-                string = current.call(parser, string, descriptor, opt);
-            if (string === false)
-                return false;
-        }
-        return string;
-    };
-
-    function Rule() {
-        this._queue = [];
-        this.__lexer__ = true;
-    };
-
-    Rule.prototype = {
-        // base for all rule's handlers
-        done: function(callback) {
-            this._queue.push(callback);
-            return this;
-        },
-        // for debug purpose
-        log: function(title) {
-            title = title || '';
-            return this.done(function(string, descriptor, opt) {
-                console.log("elenpi.log : ", title, string, descriptor);
-                return string;
-            });
-        },
-        //
-        regExp: function(reg, optional, as) {
-            return this.done(function(string, descriptor, opt) {
-                if (!string)
-                    if (optional)
-                        return string;
-                    else
-                        return false;
-                var cap = reg.exec(string);
-                if (cap) {
-                    if (as) {
-                        if (typeof as === 'string')
-                            descriptor[as] = cap[0];
-                        else
-                            as.call(this, descriptor, cap, opt);
-                    }
-                    return string.substring(cap[0].length);
-                }
-                if (!optional)
-                    return false;
-                return string;
-            });
-        },
-        char: function(test, optional) {
-            return this.done(function(string, descriptor) {
-                if (!string)
-                    return false;
-                if (string[0] === test)
-                    return string.substring(1);
-                if (optional)
-                    return string;
-                return false;
-            });
-        },
-        xOrMore: function(name, rule, separator, minimum) {
-            minimum = minimum || 0;
-            return this.done(function(string, descriptor, opt) {
-                var output = [];
-                var newString = true,
-                    count = 0;
-                while (newString && string) {
-                    var newDescriptor = name ? (this.createDescriptor ? this.createDescriptor() : {}) : descriptor;
-                    newString = exec(string, rule, newDescriptor, this, opt);
-                    if (newString !== false) {
-                        count++;
-                        string = newString;
-                        if (!newDescriptor.skip)
-                            output.push(newDescriptor);
-                        if (separator && string) {
-                            newString = exec(string, separator, newDescriptor, this, opt);
-                            if (newString !== false)
-                                string = newString;
-                        }
-                    }
-                }
-                if (count < minimum)
-                    return false;
-                if (name && output.length)
-                    descriptor[name] = output;
-                return string;
-            });
-        },
-        zeroOrMore: function(as, rule, separator) {
-            return this.xOrMore(as, rule, separator, 0);
-        },
-        oneOrMore: function(as, rule, separator) {
-            return this.xOrMore(as, rule, separator, 1);
-        },
-        zeroOrOne: function(as, rule) {
-            if (arguments.length === 1) {
-                rule = as;
-                as = null;
-            }
-            return this.done(function(string, descriptor, opt) {
-                if (!string)
-                    return string;
-                var newDescriptor = as ? (this.createDescriptor ? this.createDescriptor() : {}) : descriptor,
-                    res = exec(string, rule, newDescriptor, this, opt);
-                if (res !== false) {
-                    if (as)
-                        descriptor[as] = newDescriptor;
-                    string = res;
-                }
-                return string;
-            });
-        },
-        oneOf: function(as, rules, optional) {
-            if (arguments.length === 1) {
-                rules = as;
-                as = null;
-            }
-            return this.done(function(string, descriptor, opt) {
-                if (!string)
-                    return false;
-                var count = 0;
-                while (count < rules.length) {
-                    var newDescriptor = as ? (this.createDescriptor ? this.createDescriptor() : {}) : descriptor,
-                        newString = exec(string, rules[count], newDescriptor, this, opt);
-                    if (newString !== false) {
-                        if (as)
-                            descriptor[as] = newDescriptor;
-                        return newString;
-                    }
-                    count++;
-                }
-                if (optional)
-                    return string;
-                return false;
-            });
-        },
-        rule: function(name) {
-            return this.done(function(string, descriptor, opt) {
-                var rule = this.rules[name];
-                if (!rule)
-                    throw new Error('elenpi.Rule :  rules not found : ' + name);
-                return exec(string, rule, descriptor, this, opt);
-            });
-        },
-        skip: function() {
-            return this.done(function(string, descriptor) {
-                descriptor.skip = true;
-                return string;
-            });
-        },
-        space: function(needed) {
-            return this.done(function(string, descriptor) {
-                if (!string)
-                    if (needed)
-                        return false;
-                    else
-                        return string;
-                var cap = (this.rules.space || defaultSpaceRegExp).exec(string);
-                if (cap)
-                    return string.substring(cap[0].length);
-                else if (needed)
-                    return false;
-                return string;
-            });
-        },
-        end: function(needed) {
-            return this.done(function(string, descriptor) {
-                if (!string || !needed)
-                    return string;
-                return false;
-            });
-        }
-    };
-
-    var Parser = function(rules, defaultRule) {
-        this.rules = rules;
-        this.defaultRule = defaultRule;
-    };
-    Parser.prototype = {
-        exec: function(string, descriptor, rule, opt) {
-            if (!rule)
-                rule = this.rules[this.defaultRule];
-            return exec(string, rule, descriptor, this, opt);
-        },
-        parse: function(string, rule, opt) {
-            var descriptor = this.createDescriptor ? this.createDescriptor() : {};
-            var ok = this.exec(string, descriptor, rule, opt);
-            if (ok === false || ok.length > 0)
-                return false;
-            return descriptor;
-        }
-    };
-
-    var elenpi = {
-        r: function() {
-            return new Rule();
-        },
-        Rule: Rule,
-        Parser: Parser
-    };
-
-    if (typeof module !== 'undefined' && module.exports)
-        module.exports = elenpi; // use common js if avaiable
-    else this.elenpi = elenpi; // assign to global window
-})();
-//___________________________________________________
-
-},{}],19:[function(require,module,exports){
-/**
- * A reimplmentation RQL for JavaScript arrays based on rql/js-array from Kris Zyp (https://github.com/persvr/rql).
- * No more eval or new Function. (it has been made for Adobe Air projects. Adobe Air does not allow eval or new Function)
- *
- * Contains could also check if an array is contained in another array.
- *
- * Could handle dotted path for properties
- * 
- * @example
- * rql([{a:{b:3}},{a:3}], "a.b=3") -> [{a:{b:3}]
- * @author Gilles Coomans <gilles.coomans@gmail.com>
- */
-(function(global) {
-	"use strict";
-	var parser = require('rql/parser');
-
-	function inArray(what, inArr) {
-		if (!inArr || !inArr.forEach)
-			return false;
-		if (what.forEach) {
-			var test = {};
-			inArr.forEach(function(e) {
-				test[e] = true;
-			});
-			var okCount = 0;
-			what.forEach(function(e) {
-				if (test[e])
-					okCount++;
-			});
-			if (okCount == what.length)
-				return true;
-			return false;
-		}
-		return inArr.some(function(e) {
-			return what === e;
-		});
-	}
-
-	var rqlParser = parser.parseQuery;
-
-	var queryCache = {};
-
-	var rql = function(array, query) {
-		if (query[0] == "?")
-			query = query.substring(1);
-		if (queryCache[query])
-			return queryCache[query].call(array);
-		return rql.compile(query).call(array);
-	};
-
-	rql.parse = function(input) {
-		try {
-			var r = rqlParser(input);
-			r.toString = function() {
-				return input;
-			};
-			return r;
-		} catch (e) {
-			return null;
-		}
-	};
-
-	rql.compile = function(query) {
-		var parsed = rql.parse(query);
-		var func = rqlNodeToFunc(parsed);
-		queryCache[query] = func;
-		return func;
-	};
-	var nextId = 1;
-	rql.ops = {
-		isPresent: function(path, items) {
-			var res = [];
-			var len = items.length;
-			for (var i = 0; i < len; ++i)
-				if (retrieve(items[i], path))
-					res.push(items[i]);
-			return res;
-		},
-		sort: function() {
-			var terms = [];
-			for (var i = 0; i < arguments.length; i++) {
-				var sortAttribute = arguments[i];
-				var firstChar = sortAttribute.charAt(0);
-				var term = {
-					attribute: sortAttribute,
-					ascending: true
-				};
-				if (firstChar == "-" || firstChar == "+") {
-					if (firstChar == "-")
-						term.ascending = false;
-					term.attribute = term.attribute.substring(1);
-				}
-				terms.push(term);
-			}
-			this.sort(function(a, b) {
-				for (var i = 1, term = terms[0]; term; i++) {
-					var ar = retrieve(a, term.attribute);
-					var br = retrieve(b, term.attribute);
-					if (ar != br)
-						return term.ascending == ar > br ? 1 : -1;
-					term = terms[i];
-				}
-				return 0;
-			});
-			return this;
-		},
-		match: filter(function(value, regex) {
-			return new RegExp(regex).test(value);
-		}),
-		"in": filter(function(value, values) {
-			var ok = false;
-			var count = 0;
-			while (!ok && count < values.length)
-				if (values[count++] == value)
-					ok = true;
-			return ok;
-		}),
-		out: filter(function(value, values) {
-			var ok = true;
-			var count = 0;
-			while (ok && count < values.length)
-				if (values[count++] == value)
-					ok = false;
-			return ok;
-		}),
-		contains: filter(function(array, value) {
-			return inArray(value, array);
-		}),
-		excludes: filter(function(array, value) {
-			return !inArray(value, array);
-		}),
-		or: function() {
-			// corrected with https://github.com/persvr/rql/commit/758ca34f91b7bcd18158bc34ffe0d42ab43747d8
-			var items = [],
-				idProperty = "__rqlId" + nextId++,
-				i, l;
-			try {
-				for (i = 0; i < arguments.length; i++) {
-					var group = arguments[i].call(this);
-					l = group.length;
-					for (var j = 0; j < l; j++) {
-						var item = group[j];
-						// use marker to do a union in linear time.
-						if (!item[idProperty]) {
-							item[idProperty] = true;
-							items.push(item);
-						}
-					}
-				}
-			} finally {
-				// cleanup markers
-				for (i = 0, l = items.length; i < l; i++) {
-					delete items[idProperty];
-				}
-			}
-			return items;
-		},
-		and: function() {
-			var items = this;
-			for (var i = 0; i < arguments.length; ++i) {
-				var a = arguments[i];
-				if (typeof a == 'function')
-					items = a.call(items);
-				else
-					items = rql.ops.isPresent(a, items);
-			}
-			return items;
-		},
-		select: function() {
-			var args = arguments;
-			var argc = arguments.length;
-			var res = this.map(function(object) {
-				var selected = {};
-				for (var i = 0; i < argc; i++) {
-					var propertyName = args[i];
-					var value = evaluateProperty(object, propertyName);
-					if (typeof value != "undefined")
-						selected[propertyName] = value;
-				}
-				return selected;
-			});
-			return res;
-		},
-		unselect: function() {
-			var args = arguments;
-			var argc = arguments.length;
-			return this.map(function(object) {
-				var selected = {};
-				for (var i in object)
-					if (object.hasOwnProperty(i))
-						selected[i] = object[i];
-				for (var j = 0; j < argc; j++)
-					delete selected[args[j]];
-				return selected;
-			});
-		},
-		values: function(first) {
-			if (arguments.length == 1)
-				return this.map(function(object) {
-					return retrieve(object, first);
-				});
-			var args = arguments;
-			var argc = arguments.length;
-			return this.map(function(object) {
-				var realObject = retrieve(object);
-				var selected = [];
-				if (argc === 0) {
-					for (var i in realObject)
-						if (realObject.hasOwnProperty(i))
-							selected.push(realObject[i]);
-				} else
-					for (var j = 0; j < argc; j++) {
-						var propertyName = args[j];
-						selected.push(realObject[propertyName]);
-					}
-				return selected;
-			});
-		},
-		limit: function(limit, start, maxCount) {
-			var totalCount = this.length;
-			start = start || 0;
-			var sliced = this.slice(start, start + limit);
-			if (maxCount) {
-				sliced.start = start;
-				sliced.end = start + sliced.length - 1;
-				sliced.totalCount = Math.min(totalCount, typeof maxCount === "number" ? maxCount : Infinity);
-			}
-			return sliced;
-		},
-		distinct: function() {
-			var primitives = {};
-			var needCleaning = [];
-			var newResults = this.filter(function(value) {
-				value = retrieve(value);
-				if (value && typeof value == "object") {
-					if (!value.__found__) {
-						value.__found__ = function() {}; // get ignored by JSON serialization
-						needCleaning.push(value);
-						return true;
-					}
-					return false;
-				}
-				if (!primitives[value]) {
-					primitives[value] = true;
-					return true;
-				}
-				return false;
-			});
-			needCleaning.forEach(function(object) {
-				delete object.__found__;
-			});
-			return newResults;
-		},
-		recurse: function(property) {
-			var newResults = [];
-
-			function recurse(value) {
-				if (value.forEach)
-					value.forEach(recurse);
-				else {
-					newResults.push(value);
-					if (property) {
-						value = value[property];
-						if (value && typeof value == "object")
-							recurse(value);
-					} else
-						for (var i in value)
-							if (value[i] && typeof value[i] == "object")
-								recurse(value[i]);
-				}
-			}
-			recurse(retrieve(this));
-			return newResults;
-		},
-		aggregate: function() {
-			var distinctives = [];
-			var aggregates = [];
-			for (var i = 0; i < arguments.length; i++) {
-				var arg = arguments[i];
-				if (typeof arg === "function")
-					aggregates.push(arg);
-				else
-					distinctives.push(arg);
-			}
-			var distinctObjects = {};
-			var dl = distinctives.length;
-			this.forEach(function(object) {
-				object = retrieve(object);
-				var key = "";
-				for (var i = 0; i < dl; i++)
-					key += '/' + object[distinctives[i]];
-				var arrayForKey = distinctObjects[key];
-				if (!arrayForKey)
-					arrayForKey = distinctObjects[key] = [];
-				arrayForKey.push(object);
-			});
-			var al = aggregates.length;
-			var newResults = [];
-			for (var key in distinctObjects) {
-				var arrayForKey = distinctObjects[key];
-				var newObject = {};
-				for (var j = 0; j < dl; j++) {
-					var property = distinctives[j];
-					newObject[property] = arrayForKey[0][property];
-				}
-				for (var k = 0; k < al; k++) {
-					var aggregate = aggregates[k];
-					newObject[k] = aggregate.call(arrayForKey);
-				}
-				newResults.push(newObject);
-			}
-			return newResults;
-		},
-		between: filter(function(value, range) {
-			value = retrieve(value);
-			return value >= range[0] && value < range[1];
-		}),
-		sum: reducer(function(a, b) {
-			return retrieve(a) + retrieve(b);
-		}),
-		mean: function(property) {
-			return rql.ops.sum.call(this, property) / this.length;
-		},
-		max: reducer(function(a, b) {
-			return Math.max(retrieve(a), retrieve(b));
-		}),
-		min: reducer(function(a, b) {
-			return Math.min(retrieve(a), retrieve(b));
-		}),
-		count: function() {
-			return this.length;
-		},
-		first: function() {
-			return this[0];
-		},
-		last: function() {
-			return this[this.length - 1];
-		},
-		random: function() {
-			return this[Math.round(Math.random() * (this.length - 1))];
-		},
-		one: function() {
-			if (this.length > 1)
-				throw new Error("RQLError : More than one object found");
-			return this[0];
-		}
-	};
-
-	function rqlNodeToFunc(node) {
-		if (typeof node === 'object') {
-			var name = node.name;
-			var args = node.args;
-			if (node.forEach)
-				return node.map(rqlNodeToFunc);
-			else {
-				var b = args[0],
-					path = null;
-				if (args.length == 2) {
-					path = b;
-					b = args[1];
-				}
-				var func = null;
-				var isFilter = false;
-				switch (name) {
-					case "eq":
-						isFilter = true;
-						func = function eq(a) {
-							return (retrieve(a, path) || undefined) === b;
-						};
-						break;
-					case "ne":
-						isFilter = true;
-						func = function ne(a) {
-							return (retrieve(a, path) || undefined) !== b;
-						};
-						break;
-					case "le":
-						isFilter = true;
-						func = function le(a) {
-							return (retrieve(a, path) || undefined) <= b;
-						};
-						break;
-					case "ge":
-						isFilter = true;
-						func = function ge(a) {
-							return (retrieve(a, path) || undefined) >= b;
-						};
-						break;
-					case "lt":
-						isFilter = true;
-						func = function lt(a) {
-							return (retrieve(a, path) || undefined) < b;
-						};
-						break;
-					case "gt":
-						isFilter = true;
-						func = function gt(a) {
-							return (retrieve(a, path) || undefined) > b;
-						};
-						break;
-					default:
-						var ops = rql.ops[name];
-						if (!ops)
-							throw new Error("RQLError : no operator found in rql with : " + name);
-						if (args && args.length > 0) {
-							args = args.map(rqlNodeToFunc);
-							func = function() {
-								return ops.apply(this, args);
-							};
-						} else
-							func = function() {
-								return ops.call(this);
-							};
-				}
-				if (isFilter)
-					return function() {
-						var r = this.filter(func);
-						return r;
-					};
-				else
-					return func;
-			}
-		} else
-			return node;
-	}
-
-	function retrieve(obj, path) {
-		if (!path)
-			return obj;
-		var splitted = path.split(".");
-		var tmp = obj;
-		if (!tmp)
-			return;
-		var count = 0,
-			part = splitted[count];
-		while (part && tmp[part]) {
-			tmp = tmp[part];
-			part = splitted[++count];
-		}
-		if (count === splitted.length)
-		// manage Date as in https://github.com/persvr/rql/commit/117a7c94caf9ac99b263c01af6008af61b902f2f
-			return (tmp instanceof Date) ? tmp.valueOf() : tmp;
-		return;
-	}
-
-	function filter(condition, not) {
-		var filtr = function(property, second) {
-			if (typeof second == "undefined") {
-				second = property;
-				property = undefined;
-			}
-			var args = arguments;
-			var filtered = [];
-			for (var i = 0, length = this.length; i < length; i++) {
-				var item = this[i];
-				if (condition(evaluateProperty(item, property), second))
-					filtered.push(item);
-			}
-			return filtered;
-		};
-		filtr.condition = condition;
-		return filtr;
-	}
-
-	function reducer(func) {
-		return function(property) {
-			if (property)
-				return this.map(function(object) {
-					return retrieve(object, property);
-				}).reduce(func);
-			else
-				return this.reduce(func);
-		};
-	}
-
-	function evaluateProperty(object, property) {
-		if (property && property.forEach)
-			return retrieve(object, decodeURIComponent(property));
-		if (typeof property === 'undefined')
-			return retrieve(object);
-		return retrieve(object, decodeURIComponent(property));
-	}
-	if (typeof module !== 'undefined' && module.exports)
-		module.exports = rql;
-	else
-		global.orql = rql;
-})(this);
-
-},{"rql/parser":20}],20:[function(require,module,exports){
-/**
- * This module provides RQL parsing. For example:
- * var parsed = require("./parser").parse("b=3&le(c,5)");
- */
-({define:typeof define!="undefined"?define:function(deps, factory){module.exports = factory(exports, require("./util/contains"));}}).
-define(["exports", "./util/contains"], function(exports, contains){
-
-var operatorMap = {
-	"=": "eq",
-	"==": "eq",
-	">": "gt",
-	">=": "ge",
-	"<": "lt",
-	"<=": "le",
-	"!=": "ne"
-};
-
-
-exports.primaryKeyName = 'id';
-exports.lastSeen = ['sort', 'select', 'values', 'limit'];
-exports.jsonQueryCompatible = true;
-
-function parse(/*String|Object*/query, parameters){
-	if (typeof query === "undefined" || query === null)
-		query = '';
-	var term = new exports.Query();
-	var topTerm = term;
-	topTerm.cache = {}; // room for lastSeen params
-	if(typeof query === "object"){
-		if(query instanceof exports.Query){
-			return query;
-		}
-		for(var i in query){
-			var term = new exports.Query();
-			topTerm.args.push(term);
-			term.name = "eq";
-			term.args = [i, query[i]];
-		}
-		return topTerm;
-	}
-	if(query.charAt(0) == "?"){
-		throw new URIError("Query must not start with ?");
-	}
-	if(exports.jsonQueryCompatible){
-		query = query.replace(/%3C=/g,"=le=").replace(/%3E=/g,"=ge=").replace(/%3C/g,"=lt=").replace(/%3E/g,"=gt=");
-	}
-	if(query.indexOf("/") > -1){ // performance guard
-		// convert slash delimited text to arrays
-		query = query.replace(/[\+\*\$\-:\w%\._]*\/[\+\*\$\-:\w%\._\/]*/g, function(slashed){
-			return "(" + slashed.replace(/\//g, ",") + ")";
-		});
-	}
-	// convert FIQL to normalized call syntax form
-	query = query.replace(/(\([\+\*\$\-:\w%\._,]+\)|[\+\*\$\-:\w%\._]*|)([<>!]?=(?:[\w]*=)?|>|<)(\([\+\*\$\-:\w%\._,]+\)|[\+\*\$\-:\w%\._]*|)/g,
-	                     //<---------       property        -----------><------  operator -----><----------------   value ------------------>
-			function(t, property, operator, value){
-		if(operator.length < 3){
-			if(!operatorMap[operator]){
-				throw new URIError("Illegal operator " + operator);
-			}
-			operator = operatorMap[operator];
-		}
-		else{
-			operator = operator.substring(1, operator.length - 1);
-		}
-		return operator + '(' + property + "," + value + ")";
-	});
-	if(query.charAt(0)=="?"){
-		query = query.substring(1);
-	}
-	var leftoverCharacters = query.replace(/(\))|([&\|,])?([\+\*\$\-:\w%\._]*)(\(?)/g,
-	                       //    <-closedParan->|<-delim-- propertyOrValue -----(> |
-		function(t, closedParan, delim, propertyOrValue, openParan){
-			if(delim){
-				if(delim === "&"){
-					setConjunction("and");
-				}
-				if(delim === "|"){
-					setConjunction("or");
-				}
-			}
-			if(openParan){
-				var newTerm = new exports.Query();
-				newTerm.name = propertyOrValue;
-				newTerm.parent = term;
-				call(newTerm);
-			}
-			else if(closedParan){
-				var isArray = !term.name;
-				term = term.parent;
-				if(!term){
-					throw new URIError("Closing paranthesis without an opening paranthesis");
-				}
-				if(isArray){
-					term.args.push(term.args.pop().args);
-				}
-			}
-			else if(propertyOrValue || delim === ','){
-				term.args.push(stringToValue(propertyOrValue, parameters));
-
-				// cache the last seen sort(), select(), values() and limit()
-				if (contains(exports.lastSeen, term.name)) {
-					topTerm.cache[term.name] = term.args;
-				}
-				// cache the last seen id equality
-				if (term.name === 'eq' && term.args[0] === exports.primaryKeyName) {
-					var id = term.args[1];
-					if (id && !(id instanceof RegExp)) id = id.toString();
-					topTerm.cache[exports.primaryKeyName] = id;
-				}
-			}
-			return "";
-		});
-	if(term.parent){
-		throw new URIError("Opening paranthesis without a closing paranthesis");
-	}
-	if(leftoverCharacters){
-		// any extra characters left over from the replace indicates invalid syntax
-		throw new URIError("Illegal character in query string encountered " + leftoverCharacters);
-	}
-
-	function call(newTerm){
-		term.args.push(newTerm);
-		term = newTerm;
-		// cache the last seen sort(), select(), values() and limit()
-		if (contains(exports.lastSeen, term.name)) {
-			topTerm.cache[term.name] = term.args;
-		}
-	}
-	function setConjunction(operator){
-		if(!term.name){
-			term.name = operator;
-		}
-		else if(term.name !== operator){
-			throw new Error("Can not mix conjunctions within a group, use paranthesis around each set of same conjuctions (& and |)");
-		}
-	}
-    function removeParentProperty(obj) {
-    	if(obj && obj.args){
-	    	delete obj.parent;
-	    	var args = obj.args;
-			for(var i = 0, l = args.length; i < l; i++){
-		    	removeParentProperty(args[i]);
-		    }
-    	}
-        return obj;
-    };
-    removeParentProperty(topTerm);
-    return topTerm;
-};
-
-exports.parse = exports.parseQuery = parse;
-
-/* dumps undesirable exceptions to Query().error */
-exports.parseGently = function(){
-	var terms;
-	try {
-		terms = parse.apply(this, arguments);
-	} catch(err) {
-		terms = new exports.Query();
-		terms.error = err.message;
-	}
-	return terms;
-}
-
-exports.commonOperatorMap = {
-	"and" : "&",
-	"or" : "|",
-	"eq" : "=",
-	"ne" : "!=",
-	"le" : "<=",
-	"ge" : ">=",
-	"lt" : "<",
-	"gt" : ">"
-}
-function stringToValue(string, parameters){
-	var converter = exports.converters['default'];
-	if(string.charAt(0) === "$"){
-		var param_index = parseInt(string.substring(1)) - 1;
-		return param_index >= 0 && parameters ? parameters[param_index] : undefined;
-	}
-	if(string.indexOf(":") > -1){
-		var parts = string.split(":",2);
-		converter = exports.converters[parts[0]];
-		if(!converter){
-			throw new URIError("Unknown converter " + parts[0]);
-		}
-		string = parts[1];
-	}
-	return converter(string);
-};
-
-var autoConverted = exports.autoConverted = {
-	"true": true,
-	"false": false,
-	"null": null,
-	"undefined": undefined,
-	"Infinity": Infinity,
-	"-Infinity": -Infinity
-};
-
-exports.converters = {
-	auto: function(string){
-		if(autoConverted.hasOwnProperty(string)){
-			return autoConverted[string];
-		}
-		var number = +string;
-		if(isNaN(number) || number.toString() !== string){
-/*			var isoDate = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2}(?:\.\d*)?)Z$/.exec(date);
-			if (isoDate) {
-				return new Date(Date.UTC(+isoDate[1], +isoDate[2] - 1, +isoDate[3], +isoDate[4], +isoDate[5], +isoDate[6]));
-			}*/
-			string = decodeURIComponent(string);
-			if(exports.jsonQueryCompatible){
-				if(string.charAt(0) == "'" && string.charAt(string.length-1) == "'"){
-					return JSON.parse('"' + string.substring(1,string.length-1) + '"');
-				}
-			}
-			return string;
-		}
-		return number;
-	},
-	number: function(x){
-		var number = +x;
-		if(isNaN(number)){
-			throw new URIError("Invalid number " + number);
-		}
-		return number;
-	},
-	epoch: function(x){
-		var date = new Date(+x);
-		if (isNaN(date.getTime())) {
-			throw new URIError("Invalid date " + x);
-		}
-		return date;
-	},
-	isodate: function(x){
-		// four-digit year
-		var date = '0000'.substr(0,4-x.length)+x;
-		// pattern for partial dates
-		date += '0000-01-01T00:00:00Z'.substring(date.length);
-		return exports.converters.date(date);
-	},
-	date: function(x){
-		var isoDate = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2}(?:\.\d*)?)Z$/.exec(x);
-		if (isoDate) {
-			date = new Date(Date.UTC(+isoDate[1], +isoDate[2] - 1, +isoDate[3], +isoDate[4], +isoDate[5], +isoDate[6]));
-		}else{
-			date = new Date(x);
-		}
-		if (isNaN(date.getTime())){
-			throw new URIError("Invalid date " + x);
-		}
-		return date;
-
-	},
-	"boolean": function(x){
-		return x === "true";
-	},
-	string: function(string){
-		return decodeURIComponent(string);
-	},
-	re: function(x){
-		return new RegExp(decodeURIComponent(x), 'i');
-	},
-	RE: function(x){
-		return new RegExp(decodeURIComponent(x));
-	},
-	glob: function(x){
-		var s = decodeURIComponent(x).replace(/([\\|\||\(|\)|\[|\{|\^|\$|\*|\+|\?|\.|\<|\>])/g, function(x){return '\\'+x;}).replace(/\\\*/g,'.*').replace(/\\\?/g,'.?');
-		if (s.substring(0,2) !== '.*') s = '^'+s; else s = s.substring(2);
-		if (s.substring(s.length-2) !== '.*') s = s+'$'; else s = s.substring(0, s.length-2);
-		return new RegExp(s, 'i');
-	}
-};
-
-// exports.converters["default"] can be changed to a different converter if you want
-// a different default converter, for example:
-// RP = require("rql/parser");
-// RP.converters["default"] = RQ.converter.string;
-exports.converters["default"] = exports.converters.auto;
-
-// this can get replaced by the chainable query if query.js is loaded
-exports.Query = function(){
-	this.name = "and";
-	this.args = [];
-};
-return exports;
-});
-
-},{"./util/contains":21}],21:[function(require,module,exports){
-({define:typeof define!=='undefined'?define:function(deps, factory){module.exports = factory(exports);}}).
-define([], function(){
-return contains;
-
-function contains(array, item){
-	for(var i = 0, l = array.length; i < l; i++){
-		if(array[i] === item){
-			return true;
-		}
-	}
-}
-});
-
-},{}],22:[function(require,module,exports){
-/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-
-(function() {
-	'use strict';
-
-	var elenpi = require('elenpi/index'),
-		r = elenpi.r;
-
-	var casting = {
-		i: function(input) { // integer
-			var r = parseInt(input, 10);
-			return (!isNaN(r) && r !== Infinity) ? r : null;
-		},
-		f: function(input) { // float
-			var r = parseFloat(input);
-			return (!isNaN(r) && r !== Infinity) ? r : null;
-		},
-		b: function(input) { // bool
-			if (input === 'true')
-				return true;
-			if (input === 'false')
-				return false;
-			return null;
-		},
-		q: function(input) { // query
-			return (input[0] !== '?') ? null : input;
-		},
-		s: function(input) { // string
-			return (input[0] == '?') ? null : input;
-		}
-	};
-
-	var rules = {
-		disjonction: r()
-			.regExp(/^\[\s*/)
-			.oneOrMore('disjonction',
-				r().rule('xpr'),
-				r().regExp(/^\s*,\s*/)
-			)
-			.regExp(/^\s*\]/),
-
-		cast: r()
-			.regExp(/^([\w-_]+):/, true, function(descriptor, cap) {
-				descriptor.cast = casting[cap[1]];
-				if (!descriptor.cast)
-					throw new Error('routes : no cast method as : ' + cap[1]);
-			}),
-
-		end: r()
-			.regExp(/^\$/, false, 'end'),
-
-		steps: r()
-			.zeroOrMore('steps',
-				r().rule('xpr'),
-				r().regExp(/^\//)
-			),
-
-		block: r()
-			.regExp(/^\(\s*/)
-			.rule('steps')
-			.regExp(/^\s*\)/),
-
-		key: r()
-			.regExp(/^[0-9\w-_\.]+/, false, 'key'),
-
-		xpr: r()
-			.oneOf(null, [
-				r().regExp(/^\!/, false, 'not'),
-				r().regExp(/^\?/, false, 'optional')
-			], true)
-			.oneOf(null, [r().rule('cast').rule('key'), 'end', 'disjonction', 'block']),
-
-		route: r()
-			.regExp(/^\./, true, 'local')
-			.regExp(/^\//)
-			.rule('steps')
-	};
-
-	var parser = new elenpi.Parser(rules, 'route');
-
-	var RouteStep = function(route) {};
-
-	RouteStep.prototype.match = function(descriptor) {
-		var ok = false;
-		if (descriptor.route.length > descriptor.index) {
-			if (this.end) {
-				if (descriptor.index === descriptor.route.length)
-					ok = true;
-			} else if (this.steps) { // block
-				ok = this.steps.every(function(step) {
-					return step.match(descriptor);
-				});
-			} else if (this.disjonction) {
-				ok = this.disjonction.some(function(step) {
-					return step.match(descriptor);
-				});
-			} else if (this.cast) { // casted variable
-				var res = this.cast(descriptor.route[descriptor.index]);
-				if (res !== null) {
-					descriptor.output[this.key] = res;
-					descriptor.index++;
-					ok = true;
-				}
-			} else if (descriptor.route[descriptor.index] === this.key) {
-				descriptor.index++;
-				ok = true;
-			}
-		}
-		if (this.not)
-			ok = !ok;
-		else if (!ok && this.optional)
-			return true;
-		return ok;
-	};
-
-	parser.createDescriptor = function() {
-		return new RouteStep();
-	};
-
-	var Route = function(route) {
-		this.parsed = parser.parse(route);
-		if (!this.parsed)
-			throw new Error('route could not be parsed : ' + route);
-	};
-
-	Route.prototype.match = function(descriptor) {
-		if (typeof descriptor === 'string') {
-			var route = descriptor.split('/');
-			if (route[0] === '')
-				route.shift();
-			if (route[route.length - 1] === '')
-				route.pop();
-			descriptor = {
-				route: route,
-				index: 0,
-				output: {}
-			};
-		}
-		if (!this.parsed.match(descriptor))
-			return false;
-		return descriptor;
-	};
-
-	module.exports = Route;
-})();
-
-},{"elenpi/index":18}],23:[function(require,module,exports){
-/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-
-(function() {
-	'use strict';
-	var c3po = require('c3po'),
-		Context = require('../lib/context'),
-		View = require('../lib/view'),
-		Template = require('../lib/template'),
-		interpolable = require('../lib/interpolable').interpolable;
-
-	function bindMap(map, self, context, factory, promises, before, after, fail) {
-		Object.keys(map).forEach(function(i) {
-			if (map[i].__interpolable__)
-				map[i].subscribeTo(context, function(type, path, value) {
-					if (before)
-						before.call(self, context, factory, promises);
-					context.setAsync(i, c3po.get(value))
-						.then(function(s) {
-							if (after)
-								after.call(self, context, factory, promises);
-						}, function(e) {
-							if (fail)
-								return fail.call(self, context, factory, promises, e);
-							throw e;
-						});
-				});
-		});
-	};
-
-	View.prototype.load = Template.prototype.load = function(map, arg1, arg2, arg3, arg4) {
-		var path, before, after, fail;
-		if (typeof map === 'string') {
-			path = map;
-			map = {};
-			map[path] = arg1;
-			before = arg2;
-			after = arg3;
-			fail = arg4;
-		} else {
-			before = arg1;
-			after = arg2;
-			fail = arg3;
-		}
-		for (var i in map)
-			map[i] = interpolable(map[i]);
-
-		return this.exec(function(context, factory, promises) {
-			var self = this,
-				p;
-			bindMap(map, this, context, factory, promises, before, after, fail);
-			if (before)
-				before.call(self, context, factory, promises);
-			var pr = [],
-				uri;
-			for (var i in map) {
-				uri = map[i].__interpolable__ ? map[i].output(context) : map[i];
-				pr.push(context.setAsync(i, c3po.get(uri)));
-			}
-			if (pr.length == 1)
-				p = pr[0];
-			else
-				p = Promise.all(pr);
-			p.then(function(s) {
-				if (after)
-					after.call(self, context, factory, promises);
-			}, function(e) {
-				if (fail)
-					return fail.call(self, context, factory, promises, e);
-				throw e;
-			});
-			promises.push(p);
-		}, true);
-	};
-
-
-	module.exports = c3po;
-})();
-
-},{"../lib/context":3,"../lib/interpolable":6,"../lib/template":12,"../lib/view":14,"c3po":17}],24:[function(require,module,exports){
-/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-(function() {
-	'use strict';
-	var Route = require('routedsl'),
-		utils = require('../lib/utils'),
-		Context = require('../lib/context'),
-		View = require('../lib/view'),
-		Template = require('../lib/template'),
-		interpolable = require('../lib/interpolable');
-
-	var router = {};
-
-	Template.prototype.route = function(route) {
-		route = new Route(route);
-		return this.exec(function(context) {
-			context.route(route);
-		}, true);
-	};
-
-	// normally browser only
-	router.navigateTo = function(route, title, state) {
-		if (!utils.isServer)
-			window.history.pushState(state, title  || '', route);
-	};
-
-	router.Route = Route;
-
-	Context.prototype.route = View.prototype.route = function(route, adapter) {
-		if (typeof route === 'string')
-			route = new Route(route);
-		if (!this._routes)
-			bindRouter(this, adapter);
-		(this._routes = this._routes || []).push(route);
-		return this;
-	};
-
-	function checkRoutes(context, url) {
-		var ok = false;
-		context._routes.forEach(function(route) {
-			var descriptor = route.match(url);
-			if (descriptor) {
-				context.set('$route', descriptor.output);
-				ok = true;
-			}
-		});
-		return ok;
-	};
-
-	function bindRouter(context, adapter) {
-		if (context._routes)
-			return;
-		adapter = adapter || (!utils.isServer ? window : null);
-		var self = context;
-		context._routes = [];
-
-		var popstate = function(e) {
-			var url = window.history.location.relative;
-			// console.log("* POP STATE : %s - ", url, JSON.stringify(window.history.state));
-			try {
-				checkRoutes(self, url);
-			} catch (e) {
-				console.log('error on popstate : ', e, e.stack);
-			}
-		};
-
-		// popstate event from back/forward in browser
-		adapter.addEventListener('popstate', popstate);
-
-		// hashchange event from back/forward in browser
-		// adapter.addEventListener('hashchange', function(e) {
-		// 	console.log("* HASH CHANGE " + history.location.hash, " - ", JSON.stringify(history.state));
-		// });
-
-		var setstate = function(e) {
-			var url = window.history.location.relative;
-			// console.log("* SET STATE : %s - ", url, JSON.stringify(window.history.state));
-			try {
-				checkRoutes(self, url);
-			} catch (e) {
-				console.log('error on setstate : ', e, e.stack);
-			}
-		};
-
-		// setstate event when pushstate or replace state
-		adapter.addEventListener('setstate', setstate);
-
-		context._binds.push(function() {
-			adapter.removeEventListener('popstate', popstate);
-			adapter.removeEventListener('setstate', setstate);
-		});
-	};
-
-	module.exports = router;
-})();
-
-},{"../lib/context":3,"../lib/interpolable":6,"../lib/template":12,"../lib/utils":13,"../lib/view":14,"routedsl":22}],25:[function(require,module,exports){
-/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-(function() {
-	'use strict';
-	var rql = require('orql'),
-		Context = require('../lib/context'),
-		View = require('../lib/view'),
-		Template = require('../lib/template'),
-		interpolable = require('../lib/interpolable');
-
-	Template.prototype.rqlView = function(path, expr, name) {
-		return this.exec(function(context) {
-			context.rqlView(path, expr, name);
-		}, true);
-	};
-	View.prototype.rqlView = Context.prototype.rqlView = function(path, name, expr) {
-		expr = interpolable.interpolable(expr);
-		this.data[name] = [];
-		var self = this;
-		this.subscribe(path, function(type, p, value, key) {
-			value = (type === 'push' || type === 'removeAt') ? self.get(path) : value;
-			var r = rql(value, expr.__interpolable__ ? expr.output(self) : expr);
-			self.set(name, r);
-		});
-		this.set(name, rql(this.get(path), expr.__interpolable__ ? expr.output(self) : expr));
-		if (expr.__interpolable__)
-			expr.subscribeTo(this, function(type, p, xpr) {
-				self.set(name, rql(self.get(path), xpr));
-			});
-		return this;
-	};
-
-	module.exports = rql;
-})();
-
-},{"../lib/context":3,"../lib/interpolable":6,"../lib/template":12,"../lib/view":14,"orql":19}],26:[function(require,module,exports){
-/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-(function() {
-	'use strict';
-	var aright = require('aright'),
-		Context = require('../lib/context'),
-		View = require('../lib/view'),
-		Template = require('../lib/template');
-
-	Template.prototype.validate = function(path, rule) {
-		return this.exec(function(context) {
-			context.validate(path, rule);
-		}, true);
-	};
-	View.prototype.validate = Context.prototype.validate = function(path, rule) {
-		// subscribe on path then use validator to produce errors (if any) and place it in context.data.$error 
-		var self = this;
-
-		var applyValidation = function(type, path, value, key) {
-			var report;
-			if (type === 'push') // validate whole array ?
-				report = rule.validate(self.get(path));
-			else if (type !== 'removeAt')
-				report = rule.validate(value);
-			if (report !== true)
-				self.set('$error.' + path, report);
-			else
-				self.del('$error.' + path);
-		};
-
-		this.subscribe(path, applyValidation);
-		var val = this.get(path);
-		if (typeof val !== 'undefined')
-			applyValidation('set', path, val);
-		return this;
-	};
-
-	module.exports = aright;
-})();
-
-},{"../lib/context":3,"../lib/template":12,"../lib/view":14,"aright":16}]},{},[1])(1)
+},{"./emitter":5,"./parsers/open-tags":10,"./pure-node":11,"./utils":13}]},{},[1])(1)
 });
