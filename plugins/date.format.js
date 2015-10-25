@@ -127,3 +127,15 @@ dateFormat.i18n = {
 Date.prototype.format = function(mask, utc) {
 	return dateFormat(this, mask, utc);
 };
+
+module.exports = dateFormat;
+
+//___________________________________ yamvish bridge
+
+var Filter = require('../lib/filter');
+Filter.prototype.date = function(format, utc) {
+	this._queue.push(function(input) {
+		return dateFormat(new Date(input), format, utc);
+	});
+	return this;
+};
