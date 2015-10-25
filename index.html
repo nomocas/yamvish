@@ -11,8 +11,6 @@
         top: -9999;
         left: -9999;
     }
-    
-    ;
     </style>
     <script type="text/javascript" src="./dist/yamvish.js"></script>
     <script src="./test/chai.js"></script>
@@ -45,22 +43,30 @@
     <button onclick="route();">route</button>
     <button onclick="y.navigateTo('/campaign/13/?hello');">/campaign/13/?hello</button>
     <button onclick="y.navigateTo('/campaign/29');">/campaign/29</button>
+    <button onclick="y.navigateTo('/');">/home</button>
     <button onclick="validation();">validation</button>
     <button onclick="testNewFunc();">test new func</button>
     <button onclick="expression();">xpres</button>
     <button onclick="dependent();">dependent</button>
+    <button onclick="fromTemplate();">from template</button>
+    <button onclick="fromView();">from view</button>
+    <button onclick="filter();">filter</button>
+    <button onclick="date();">date</button>
     <div id="mocha"></div>
     <script type="text/javascript" src="node_modules/min-history/dist/min-history.min.js"></script>
     <script type="text/javascript">
+    // min-history
     history.init({
         hashChangeAlone: true,
         setStateEvent: true,
         basePath: "",
         hid: true
     });
-    </script>
-    <script type="text/javascript">
-    var numNodes = 200;
+
+    // yamvish
+    y.env.global.debug = true;
+
+    var numNodes = 1000;
 
     function range(size) {
         var output = [];
@@ -73,9 +79,7 @@
         data: {
             title: 'Simpler is Better',
             users: ["John", "Bill"],
-            range: range(numNodes)
-        },
-        handlers: {
+            range: range(numNodes),
             hello: function(event) {
                 console.log("click hellossss");
             }
@@ -117,7 +121,7 @@
                         y().click(function(evt) {
                             console.log('hello item : ', evt.target.textContent);
                         })
-                        .text('{{ $this }}')
+                        .text('{{ $this | string().upper() }}')
                     )
                 )
             )
@@ -136,10 +140,10 @@
             context.data.range = range(numNodes);
             var time = new Date().getTime();
 
-            container = templ.toElement(context).mount("#mocha");
+            container = templ.toContainer(context).mount("#mocha");
 
             time = new Date().getTime() - time;
-            context.set('range.0', 'Template.toElement.mount : ' + time);
+            context.set('range.0', 'Template.toContainer.mount : ' + time);
         } catch (e) {
             console.log('error : ', e, e.stack);
         }
@@ -163,7 +167,7 @@
         try {
             console.time("yamvish Template.toVirtual");
             var time = new Date().getTime();
-            virtualContainer = templ.toElement(context, y.Virtual);
+            virtualContainer = templ.toContainer(context, y.Virtual);
             time = new Date().getTime() - time;
             console.timeEnd("yamvish Template.toVirtual");
             context.set('range.0', 'Template.toVirtual : ' + time)
@@ -204,7 +208,7 @@
         try {
             console.time("yamvish Template.toVirtual.toString");
             var time = new Date().getTime();
-            var r = templ.toElement(context, y.Virtual).toString();
+            var r = templ.toContainer(context, y.Virtual).toString();
             time = new Date().getTime() - time;
             console.timeEnd("yamvish Template.toVirtual.toString");
             context.set('range.0', 'Template.toVirtual.toString : ' + time)
@@ -280,13 +284,13 @@
                 .p('{{ title }}')
                 // container
                 .mount('#mocha')
-                .exec(function(context, factory, promises) {
-                    promises.push(new Promise(function(resolve, reject) {
+                .exec(function(context, factory) {
+                    return new Promise(function(resolve, reject) {
                         setTimeout(function() {
                             context.set('title', 'yesss')
                             resolve(true);
                         }, 1000);
-                    }));
+                    });
                 });
 
 
@@ -327,7 +331,7 @@
         };
         try {
             console.time("load");
-            window.view = new y.View()
+            var view = new y.View()
                 .set('aVar', 'some text')
                 .load('title', 'text::{{ aVar }}',
                     y().set('loading', true),
@@ -340,6 +344,14 @@
             view.then(function(s) {
                 console.log("load end : ", s);
             });
+
+            setTimeout(function() {
+                view.set('aVar', 'rolalalalala')
+                    .then(function(s) {
+                        console.log("alteration end");
+                        return 'flup';
+                    })
+            }, 2000);
             console.timeEnd("load");
         } catch (e) {
             console.log("error : ", e, e.stack);
@@ -351,25 +363,22 @@
         try {
             y.c3po.protocols.campaign = {
                 get: function(req, opt) {
-                    // async simulation
-                    return new Promise(function(resolve) {
-                        setTimeout(function() {
-                            resolve({
-                                title: 'hello campaign ' + req,
-                                id: req
-                            });
-                        }, 1);
+                    return Promise.resolve({
+                        title: 'hello campaign ' + req,
+                        id: req
                     });
                 }
             };
 
             var view = new y.View()
-                .route('/campaign/s:id/?q:query') // should hide/show node if route match or not
-                .load('campaign', 'campaign::{{ $route.id + ($route.query || "" )}}') // should load only if variables are all defined (here 'id')
+                .route('/campaign/s:id/?q:query')
+                .load('campaign', 'campaign::{{ $route.id + ($route.query || "" )}}')
                 .h(1, '{{ campaign.title }}')
                 .p('{{ campaign.id }}')
-                .mount('#mocha');
-
+                .mount('#mocha')
+                .onDone(function() {
+                    console.log('route done.');
+                });
 
         } catch (e) {
             console.log("error : ", e, e.stack);
@@ -408,42 +417,24 @@
                 }
             });
 
-
-
             var raw = "{{ $.Math.cos(2) * (index+$this.sum) + title + $parent.title + 'hello' }}";
 
-            //console.time("compile");
             var time = new Date().getTime();
-            // for (var i = 0; i < 10000; ++i) {
             var xpr = y.interpolable(raw);
-            // }
             time = new Date().getTime() - time;
 
             console.log("xpr :", time, xpr);
 
             var time = new Date().getTime();
-            // for (var i = 0; i < 10000; ++i) {
             var r = xpr.output(context);
-            // }
             time = new Date().getTime() - time;
-            // console.log('xpr :  ', time, xpr, f.call(context.data, context, typeof window !== 'undefined' ? window : global));
-            // console.log('xpr :  ', time, xpr);
             console.log("r : ", time, r);
+
+            document.getElementById('mocha').innerHTML = r;
 
         } catch (e) {
             console.log("error ", e, e.stack)
         }
-        //  alert(time + " - " + f.call(context.data, context, typeof window !== 'undefined' ? window : global));
-        // console.timeEnd("compile");
-
-        /*
-        console.time("t");
-        for (var i = 0; i < 1000; ++i)
-          var r = func.call(context.data, context, typeof window !== 'undefined' ? window : global)
-        console.timeEnd("t");
-
-        console.log(r)
-        */
     }
 
     function expression() {
@@ -462,7 +453,8 @@
                 .set('deca', function(arg) {
                     return '-hello-' + arg;
                 })
-                .p('{{ title + deca(true) + $parent.foo + $this.reu + "---" + $.Math.random() }}')
+                .p('{{ title + deca(reu) }}')
+                // .p('{{ title + deca(true) + $parent.foo + $this.reu + "---" + $.Math.random() }}')
                 .mount('#mocha')
                 .set('title', 'roooo')
                 .set('reu', 'lollipop');
@@ -471,7 +463,6 @@
             console.log("error : ", e, e.stack);
         }
     }
-
 
     function dependent() {
         try {
@@ -486,6 +477,62 @@
                 .mount('#mocha')
                 .set('title', 'reu')
                 .set('foo', 'ploupiloup');
+        } catch (e) {
+            console.log("error : ", e, e.stack);
+        }
+    }
+
+    function fromTemplate() {
+        try {
+
+            y.env().templates.lollipop = y().div('{{ hello }} world');
+
+            var view = new y.View()
+                // .set('title', 'hello world')
+                .set('hello', 'yamvish')
+                .use('lollipop')
+                .mount('#mocha');
+        } catch (e) {
+            console.log("error : ", e, e.stack);
+        }
+    }
+
+    function fromView() {
+        try {
+            y.env().views.home = new y.View()
+                .set('hello', 'yamvishhhh 2 ')
+                .div('{{ hello }} world');
+
+            var view = new y.View()
+                // .set('title', 'hello world')
+                .h(1, 'weeeee')
+                .use('home')
+                .mount('#mocha');
+        } catch (e) {
+            console.log("error : ", e, e.stack);
+        }
+    }
+
+    function filter() {
+        try {
+            var view = new y.View()
+                .set('hello', 'yamvishhhh 3 ')
+                .div('{{ hello | upper() }} world')
+                .mount('#mocha');
+        } catch (e) {
+            console.log("error : ", e, e.stack);
+        }
+    }
+
+    function date() {
+        try {
+
+            var view = new y.View()
+                .set('now', new Date())
+                .set('now2', new Date().valueOf())
+                .div('{{ now | date("dd/mm/yy") }} (1)')
+                .div('{{ now2 | date("dd/mm/yy") }} (2)')
+                .mount('#mocha');
         } catch (e) {
             console.log("error : ", e, e.stack);
         }
