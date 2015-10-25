@@ -8,19 +8,19 @@
 		Template = require('../lib/template'),
 		interpolable = require('../lib/interpolable').interpolable;
 
-	function bindMap(map, self, context, factory, promises, before, after, fail) {
+	function bindMap(map, self, context, factory, before, after, fail) {
 		Object.keys(map).forEach(function(i) {
 			if (map[i].__interpolable__)
 				map[i].subscribeTo(context, function(type, path, value) {
 					if (before)
-						before.call(self, context, factory, promises);
+						before.call(self, context, factory);
 					context.setAsync(i, c3po.get(value))
 						.then(function(s) {
 							if (after)
-								after.call(self, context, factory, promises);
+								return after.call(self, context, factory);
 						}, function(e) {
 							if (fail)
-								return fail.call(self, context, factory, promises, e);
+								return fail.call(self, context, factory, e);
 							throw e;
 						});
 				});
@@ -44,12 +44,12 @@
 		for (var i in map)
 			map[i] = interpolable(map[i]);
 
-		return this.exec(function(context, factory, promises) {
+		return this.exec(function(context, factory) {
 			var self = this,
 				p;
-			bindMap(map, this, context, factory, promises, before, after, fail);
+			bindMap(map, this, context, factory, before, after, fail);
 			if (before)
-				before.call(self, context, factory, promises);
+				before.call(self, context, factory);
 			var pr = [],
 				uri;
 			for (var i in map) {
@@ -60,15 +60,15 @@
 				p = pr[0];
 			else
 				p = Promise.all(pr);
-			p.then(function(s) {
+			return p.then(function(s) {
 				if (after)
-					after.call(self, context, factory, promises);
+					return after.call(self, context, factory);
 			}, function(e) {
 				if (fail)
-					return fail.call(self, context, factory, promises, e);
+					return fail.call(self, context, factory, e);
 				throw e;
 			});
-			promises.push(p);
+			return p;
 		}, true);
 	};
 
