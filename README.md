@@ -85,10 +85,8 @@ __More__
 			articles: [{
 				title: 'Smaller is Better',
 				content:'lorem ipsum'
-			}]
-		}, 
-		handlers:{
-	    	addUser : function(event) {
+			}],
+			addUser : function(event) {
 				this.push('users', this.get('user'));
 			}
 		}
@@ -150,10 +148,8 @@ Exactly the same example than above (but a really few detail... could you find i
 				articles: [{
 					title: 'Smaller is Better',
 					content:'lorem ipsum'
-				}]
-			}, 
-			handlers:{
-		    	addUser : function(event) {
+				}],
+				addUser : function(event) {
 					this.push('users', this.get('user'));
 				}
 			}
@@ -191,10 +187,8 @@ var view = new y.View({
 		articles: [{
 			title: 'Smaller is Better',
 			content: 'lorem ipsum'
-		}]
-	},
-	handlers: {
-		addUser: function(event) {
+		}],
+		addUser : function(event) {
 			this.push('users', this.get('user'));
 		}
 	}
@@ -349,10 +343,6 @@ document.body.appendChild(elem);
 
 context.push('users', 'Biloud');
 ```
-
-
-Component Registration
-- y.addComponent(name, template || view);
 
 Interpolable string manager : (You should never use it directly)
 - y.Interpolable 	
