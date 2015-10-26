@@ -6,35 +6,42 @@ Inspired from React, Ractive, jsblocks and Riot.
 
 - really fast both sides.
 - no need of jquery/zepto or cheerio/jsdom (but you could if needed).
-- really small (core : +- 8Ko minified/gzipped (28 Ko min). with parsers : 10 Ko. full with plugins : 19 Ko)
+- really small (core : +- 8Ko minified/gzipped (28 Ko min). with parsers : 10(/36) Ko. full with plugins : 19(/63) Ko)
 - dead simple. minimal learning curve.
 
 __Data binding__ (Ractive inspiration)
 - based on simple observable-data-map (of course with two-way)
 - has 'downstream' and 'upstream' binding
+- allow computed dependents variables
 
 __Fast Templating__ (Virtual and/or pure HTMLElement handeling)
 - simple and small Template chainable/nestable API that hold a tree of functions to apply on any node (Virtual or DOM)
 - any html fragment (from string or DomElement) has an equivalent in yamvish Template API. So you could develop complete html views using only pure JS or only pure HTML or a mix of both.
+- allow full js expression and filtering
 - minimal HTML foot-print : a single attribute for everything ("data-template")
-- could output to DOMElement or to String.
-- even if it's really fast in the browser with Virtual/DOMElements handling, rendering is much faster under nodejs when using Virtual/String output.
+- could output to DOMElement, to virtual nodes, or to String.
+- even if it's really fast in the browser with Virtual/DOMElements handling, rendering is much faster under nodejs when using string output.
 - allow WebComponent style
-- allow simple inheritance and specialisation between Templates or Views
 
-__Promise awareness__
+__Promise and Async awareness__
 - use and handle Promises when needed to manage asynchroneous timing
+- easy way to get end-of-actions events/promises (mounted, unmounted, destroyed, done)
+
+__Plugins__
+Even if it's easily usable with other third party lib (routers, ressources/model managers, ...), it plays really nicely with those extensions that you could find in the plugins folder from sources :
+- yamvish router : dynamic-in-place routing made easy.
+- loader through [c3po](https://github.com/nomocas/c3po) : open pattern for ressources management wich provide clean way for handling transparently different ressources drivers from browser or server side. This allow real and __complete__ isomorphism.
+- [RQL](https://github.com/persvr/rql) array filtering, sorting and paging (and many more).
+- objects and values types validation with [aright](https://github.com/nomocas/aright) rules.
+- minimal http-request client through Promise
+- easy date formating with dateFormat and yamvish expression filters
+- easy form upload with Mozilla-form-uploader.
 
 __More__
 - highly and easily extensible
-- close to standard. should work on IE9 with polyfills (normally just classList, Promise). (maybe on IE8 with https://code.google.com/p/base2/ or more polyfills (setAttribute, addEventListener, ...) - to test ;))
+- close to standard. should work on IE9 with polyfills (normally just Promise). (work on IE8 with https://code.google.com/p/base2/ or more polyfills (setAttribute, addEventListener, ...) - to test ;))
 - UMD distribution, Common JS sources
 - clean and standard ES5 code, easy to understand and to maintain or contribute ;).
-
-__Plugins__
-Even if it's easily usable with other third party routers or ressources/model managers, it plays really nicely with those two extensions that you could find in the plugins folder from sources :
-- yamvish router : dynamic-in-place routing made easy
-- [c3po](https://github.com/nomocas/c3po) bridge : open pattern for ressources management wich provide clean way for handling transparently different ressources drivers from browser or server side. This allow real and __complete__ isomorphism
 
 
 ## Pure js Example
@@ -86,7 +93,7 @@ Even if it's easily usable with other third party routers or ressources/model ma
   
   	// create a virtual node (could be a document.createElement('div'))
 	// apply template on it and bind it to context
-	var container = template.toElement(context);
+	var container = template.toContainer(context);
 
 	// (if virtual node : render to DOMElement then) append it somewhere
 	container.mount(document.body);
@@ -151,7 +158,7 @@ Exactly the same example than above (but a really few detail... could you find i
 
 		var mountPoint = document.getElementByID('my-container'),
 			template = yamvish.dom.elementChildrenToTemplate(mountPoint),
-			container = template.toElement(context).mount(mountPoint);
+			container = template.toContainer(context).mount(mountPoint);
 
 		context.set('active', true)
 		.set('users.1', 'William')
@@ -247,7 +254,7 @@ Minimal mockup of standard (modern) DOM node :
 	- addEventListener/removeEventListener
 	- appendChild
 	- classList.add, classList.remove
-	- toElement()/toString()
+	- toContainer()/toString()
 
 Observable data map that holds also event's handlers.
 - y.Context 		
