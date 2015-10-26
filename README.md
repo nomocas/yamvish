@@ -6,7 +6,10 @@ Inspired from React, Ractive, jsblocks and Riot.
 
 - really fast both sides.
 - no need of jquery/zepto or cheerio/jsdom (but you could if needed).
-- really small (core : +- 8Ko minified/gzipped (28 Ko min). with parsers : 10(/36) Ko. full with plugins : 19(/63) Ko)
+- really small
+	- core : +- 8Ko minified/gzipped (28 Ko min).
+	- with parsers : 10(/36) Ko. 
+	- full with plugins : 19(/63) Ko)
 - dead simple. minimal learning curve.
 
 __Data binding__ (Ractive inspiration)
