@@ -12,7 +12,7 @@
         left: -9999;
     }
     </style>
-    <script type="text/javascript" src="./dist/yamvish.js"></script>
+    <script type="text/javascript" src="./dist/yamvish.full.js"></script>
     <script src="./test/chai.js"></script>
     <script src="./test/mocha.js"></script>
     <script>
@@ -178,13 +178,13 @@
 
     function runTemplateToString() {
         try {
-            console.time("yamvish Template.toString");
+            console.time("yamvish Template.toHTMLString");
             var time = new Date().getTime();
-            var r = templ.toString(context);
+            var r = templ.toHTMLString(context);
             time = new Date().getTime() - time;
-            console.timeEnd("yamvish Template.toString");
-            context.set('range.0', 'Template.toString : ' + time);
-            console.log('template.toString : ', r);
+            console.timeEnd("yamvish Template.toHTMLString");
+            context.set('range.0', 'Template.toHTMLString : ' + time);
+            console.log('template.toHTMLString : ', r);
         } catch (e) {
             console.log('error : ', e, e.stack);
         }
@@ -192,12 +192,12 @@
 
     function runToString() {
         try {
-            console.time("yamvish container.toString");
+            console.time("yamvish container.toHTMLString");
             var time = new Date().getTime();
-            var r = virtualContainer.toString();
+            var r = virtualContainer.toHTMLString();
             time = new Date().getTime() - time;
-            console.timeEnd("yamvish container.toString");
-            context.set('range.0', 'virtualContainer.toString : ' + time)
+            console.timeEnd("yamvish container.toHTMLString");
+            context.set('range.0', 'virtualContainer.toHTMLString : ' + time)
             console.log('virtual to string : ', r);
         } catch (e) {
             console.log('error : ', e, e.stack);
@@ -206,12 +206,12 @@
 
     function runToVirtualToString() {
         try {
-            console.time("yamvish Template.toVirtual.toString");
+            console.time("yamvish Template.toVirtual.toHTMLString");
             var time = new Date().getTime();
-            var r = templ.toContainer(context, y.Virtual).toString();
+            var r = templ.toContainer(context, y.Virtual).toHTMLString();
             time = new Date().getTime() - time;
-            console.timeEnd("yamvish Template.toVirtual.toString");
-            context.set('range.0', 'Template.toVirtual.toString : ' + time)
+            console.timeEnd("yamvish Template.toVirtual.toHTMLString");
+            context.set('range.0', 'Template.toVirtual.toHTMLString : ' + time)
             console.log('to virtual to string : ', r);
         } catch (e) {
             console.log('error : ', e, e.stack);
@@ -294,7 +294,7 @@
                 });
 
 
-            view.then(function(s) {
+            view.done(function(s) {
                 console.log("view full rendered");
             });
 
@@ -341,7 +341,7 @@
                 .p('loading...', y().visible('loading'))
                 .mount('#mocha');
 
-            view.then(function(s) {
+            view.done(function(s) {
                 console.log("load end : ", s);
             });
 
@@ -371,12 +371,25 @@
             };
 
             var view = new y.View()
-                .route('/campaign/s:id/?q:query')
-                .load('campaign', 'campaign::{{ $route.id + ($route.query || "" )}}')
-                .h(1, '{{ campaign.title }}')
-                .p('{{ campaign.id }}')
+                .route('/campaign/s:id/?q:query',
+                    y().log('apply route on routed')
+                    .load('campaign', 'campaign::{{ $route.id + ($route.query || "" )}}',
+                        y().set('loading', true),
+                        y().set('loading', false)
+                    )
+                )
+                .div(
+                    y().div(
+                        y().visible('!loading')
+                        .h(1, '{{ campaign.title }}')
+                        .p('{{ campaign.id }}')
+                        .p('{{ $route.query }}')
+                        .p('{{ $route.id }}')
+                    )
+                    .p('loading...', y().visible('loading'))
+                )
                 .mount('#mocha')
-                .onDone(function() {
+                .on('done', function() {
                     console.log('route done.');
                 });
 
@@ -448,12 +461,12 @@
             var view = new y.View({
                     parent: parent
                 })
-                .set('title', 'aaa@vbb.com')
+                .set('email', 'aaa@vbb.com')
                 .set('reu', 'feeee')
                 .set('deca', function(arg) {
                     return '-hello-' + arg;
                 })
-                .p('{{ title + deca(reu) }}')
+                .p('{{ email + deca(reu) }}')
                 // .p('{{ title + deca(true) + $parent.foo + $this.reu + "---" + $.Math.random() }}')
                 .mount('#mocha')
                 .set('title', 'roooo')
