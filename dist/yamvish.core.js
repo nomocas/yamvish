@@ -1,229 +1,4 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.y = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-/**
- * Todo :
- * - oneOf : add optional flag
- * - add string 'arg and return' management in regExp handlers
- */
-(function() {
-    var defaultSpaceRegExp = /^[\s\n\r]+/;
-
-    function exec(string, rule, descriptor, parser, opt) {
-        if (typeof rule === 'string')
-            rule = parser.rules[rule];
-        var rules = rule._queue;
-        for (var i = 0, len = rules.length; i < len; ++i) {
-            var current = rules[i];
-            if (current.__lexer__)
-                string = exec(string, current, descriptor, parser, opt);
-            else // is function
-                string = current.call(parser, string, descriptor, opt);
-            if (string === false)
-                return false;
-        }
-        return string;
-    };
-
-    function Rule() {
-        this._queue = [];
-        this.__lexer__ = true;
-    };
-
-    Rule.prototype = {
-        // base for all rule's handlers
-        done: function(callback) {
-            this._queue.push(callback);
-            return this;
-        },
-        // for debug purpose
-        log: function(title) {
-            title = title || '';
-            return this.done(function(string, descriptor, opt) {
-                console.log("elenpi.log : ", title, string, descriptor);
-                return string;
-            });
-        },
-        //
-        regExp: function(reg, optional, as) {
-            return this.done(function(string, descriptor, opt) {
-                if (!string)
-                    if (optional)
-                        return string;
-                    else
-                        return false;
-                var cap = reg.exec(string);
-                if (cap) {
-                    if (as) {
-                        if (typeof as === 'string')
-                            descriptor[as] = cap[0];
-                        else
-                            as.call(this, descriptor, cap, opt);
-                    }
-                    return string.substring(cap[0].length);
-                }
-                if (!optional)
-                    return false;
-                return string;
-            });
-        },
-        char: function(test, optional) {
-            return this.done(function(string, descriptor) {
-                if (!string)
-                    return false;
-                if (string[0] === test)
-                    return string.substring(1);
-                if (optional)
-                    return string;
-                return false;
-            });
-        },
-        xOrMore: function(name, rule, separator, minimum) {
-            minimum = minimum || 0;
-            return this.done(function(string, descriptor, opt) {
-                var output = [];
-                var newString = true,
-                    count = 0;
-                while (newString && string) {
-                    var newDescriptor = name ? (this.createDescriptor ? this.createDescriptor() : {}) : descriptor;
-                    newString = exec(string, rule, newDescriptor, this, opt);
-                    if (newString !== false) {
-                        count++;
-                        string = newString;
-                        if (!newDescriptor.skip)
-                            output.push(newDescriptor);
-                        if (separator && string) {
-                            newString = exec(string, separator, newDescriptor, this, opt);
-                            if (newString !== false)
-                                string = newString;
-                        }
-                    }
-                }
-                if (count < minimum)
-                    return false;
-                if (name && output.length)
-                    descriptor[name] = output;
-                return string;
-            });
-        },
-        zeroOrMore: function(as, rule, separator) {
-            return this.xOrMore(as, rule, separator, 0);
-        },
-        oneOrMore: function(as, rule, separator) {
-            return this.xOrMore(as, rule, separator, 1);
-        },
-        zeroOrOne: function(as, rule) {
-            if (arguments.length === 1) {
-                rule = as;
-                as = null;
-            }
-            return this.done(function(string, descriptor, opt) {
-                if (!string)
-                    return string;
-                var newDescriptor = as ? (this.createDescriptor ? this.createDescriptor() : {}) : descriptor,
-                    res = exec(string, rule, newDescriptor, this, opt);
-                if (res !== false) {
-                    if (as)
-                        descriptor[as] = newDescriptor;
-                    string = res;
-                }
-                return string;
-            });
-        },
-        oneOf: function(as, rules, optional) {
-            if (arguments.length === 1) {
-                rules = as;
-                as = null;
-            }
-            return this.done(function(string, descriptor, opt) {
-                if (!string)
-                    return false;
-                var count = 0;
-                while (count < rules.length) {
-                    var newDescriptor = as ? (this.createDescriptor ? this.createDescriptor() : {}) : descriptor,
-                        newString = exec(string, rules[count], newDescriptor, this, opt);
-                    if (newString !== false) {
-                        if (as)
-                            descriptor[as] = newDescriptor;
-                        return newString;
-                    }
-                    count++;
-                }
-                if (optional)
-                    return string;
-                return false;
-            });
-        },
-        rule: function(name) {
-            return this.done(function(string, descriptor, opt) {
-                var rule = this.rules[name];
-                if (!rule)
-                    throw new Error('elenpi.Rule :  rules not found : ' + name);
-                return exec(string, rule, descriptor, this, opt);
-            });
-        },
-        skip: function() {
-            return this.done(function(string, descriptor) {
-                descriptor.skip = true;
-                return string;
-            });
-        },
-        space: function(needed) {
-            return this.done(function(string, descriptor) {
-                if (!string)
-                    if (needed)
-                        return false;
-                    else
-                        return string;
-                var cap = (this.rules.space || defaultSpaceRegExp).exec(string);
-                if (cap)
-                    return string.substring(cap[0].length);
-                else if (needed)
-                    return false;
-                return string;
-            });
-        },
-        end: function(needed) {
-            return this.done(function(string, descriptor) {
-                if (!string || !needed)
-                    return string;
-                return false;
-            });
-        }
-    };
-
-    var Parser = function(rules, defaultRule) {
-        this.rules = rules;
-        this.defaultRule = defaultRule;
-    };
-    Parser.prototype = {
-        exec: function(string, descriptor, rule, opt) {
-            if (!rule)
-                rule = this.rules[this.defaultRule];
-            return exec(string, rule, descriptor, this, opt);
-        },
-        parse: function(string, rule, opt) {
-            var descriptor = this.createDescriptor ? this.createDescriptor() : {};
-            var ok = this.exec(string, descriptor, rule, opt);
-            if (ok === false || ok.length > 0)
-                return false;
-            return descriptor;
-        }
-    };
-
-    var elenpi = {
-        r: function() {
-            return new Rule();
-        },
-        Rule: Rule,
-        Parser: Parser
-    };
-
-    if (typeof module !== 'undefined' && module.exports)
-        module.exports = elenpi; // use common js if avaiable
-    else this.elenpi = elenpi; // assign to global window
-})();
-//___________________________________________________
-
-},{}],2:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 // core
 var y = function(t) {
@@ -252,20 +27,7 @@ module.exports = y;
 
  */
 
-},{"./lib/container":5,"./lib/context":6,"./lib/env":8,"./lib/filter":9,"./lib/interpolable":10,"./lib/pure-node":15,"./lib/template":16,"./lib/utils":17,"./lib/view":18}],3:[function(require,module,exports){
-/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-
-var y = require('./core');
-
-
-// parsers
-y.elenpi = require('elenpi');
-y.dom = require('./lib/parsers/dom-to-template');
-y.html = require('./lib/parsers/html-string-to-template');
-
-module.exports = y;
-
-},{"./core":2,"./lib/parsers/dom-to-template":11,"./lib/parsers/html-string-to-template":12,"elenpi":1}],4:[function(require,module,exports){
+},{"./lib/container":3,"./lib/context":4,"./lib/env":6,"./lib/filter":7,"./lib/interpolable":8,"./lib/pure-node":9,"./lib/template":10,"./lib/utils":11,"./lib/view":12}],2:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 var Emitter = require('./emitter'),
 	utils = require('./utils');
@@ -351,7 +113,7 @@ utils.mergeProto(Emitter.prototype, AsyncManager.prototype);
 
 module.exports = AsyncManager;
 
-},{"./emitter":7,"./utils":17}],5:[function(require,module,exports){
+},{"./emitter":5,"./utils":11}],3:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -464,7 +226,7 @@ Container.prototype.removeChild = function(child) {
 
 module.exports = Container;
 
-},{"./emitter":7,"./pure-node":15,"./utils":17}],6:[function(require,module,exports){
+},{"./emitter":5,"./pure-node":9,"./utils":11}],4:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -729,7 +491,7 @@ function notifyUpstreams(space, type, path, value, index) {
 
 module.exports = Context;
 
-},{"./async":4,"./utils":17}],7:[function(require,module,exports){
+},{"./async":2,"./utils":11}],5:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 /**
@@ -762,7 +524,7 @@ Emitter.prototype = {
 };
 module.exports = Emitter;
 
-},{}],8:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 (function (global){
 var env = function() {
 	return Promise.context || env.global;
@@ -783,7 +545,7 @@ env.global = {
 module.exports = env;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],9:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 function Filter(f) {
@@ -851,7 +613,7 @@ url_encode
 url_decode
  */
 
-},{}],10:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 var env = require('./env'),
 	Filter = require('./filter'),
@@ -1048,312 +810,7 @@ module.exports = {
 	Interpolable: Interpolable
 };
 
-},{"./env":8,"./filter":9}],11:[function(require,module,exports){
-/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-// var expression = require('./string-to-template');
-//_______________________________________________________ DOM PARSING
-
-/**
- * DOM element.childNodes parsing to y.Template
- * @param  {[type]} element [description]
- * @param  {[type]} template   [description]
- * @return {[type]}         [description]
- */
-function elementChildrenToTemplate(element, template) {
-	var t = template || new this.Template();
-	for (var i = 0, len = element.childNodes.length; i < len; ++i)
-		elementToTemplate(element.childNodes[i], t);
-	return t;
-};
-
-/**
- * DOM element parsing to y.Template
- * @param  {[type]} element [description]
- * @param  {[type]} template   [description]
- * @return {[type]}         [description]
- */
-function elementToTemplate(element, template) {
-	var t = template || y();
-	switch (element.nodeType) {
-		case 1:
-			// if (element.tagName.toLowerCase() === 'script')
-			// console.log('CATCH script');
-			var childTemplate = new this.Template();
-			elementChildrenToTemplate(element, childTemplate);
-			if (element.id)
-				childTemplate.id(element.id)
-			if (element.attributes.length)
-				for (var j = 0, len = element.attributes.length; j < len; ++j) {
-					var o = element.attributes[j];
-					if (o.name === 'data-template')
-						console.log("catch data template")
-					childTemplate.attr(o.name, o.value);
-				}
-			for (var l = 0; l < element.classList; ++l)
-				childTemplate.setClass(element.classList[l]);
-			t.tag.apply(t, [element.tagName.toLowerCase(), childTemplate]);
-			break;
-		case 3:
-			t.text(element.textContent);
-			break;
-		case 4:
-			console.log('element is CDATA : ', element);
-			break;
-		default:
-			console.warn('y.elementToTemplate : DOM node not managed : type : %s, ', element.nodeType, element);
-	}
-	return t;
-};
-
-module.exports = {
-	elementChildrenToTemplate: elementChildrenToTemplate,
-	elementToTemplate: elementToTemplate
-};
-
-},{}],12:[function(require,module,exports){
-/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-
-var elenpi = require('elenpi'),
-	r = elenpi.r,
-	Parser = elenpi.Parser,
-	Template = require('../template'),
-	expression = require('./string-to-template');
-
-var rules = {
-	// HTML 5 common rules
-	// html5 unstrict self closing tags : 
-	openTags: require('./open-tags'),
-
-	document: r()
-		.zeroOrMore(null, r().space().rule('comment'))
-		.regExp(/^\s*<!DOCTYPE[^>]*>\s*/i, true)
-		.rule('children')
-		.space(),
-
-	comment: r().regExp(/^<!--(?:.|\n|\r)*?(?=-->)-->/),
-
-	tagEnd: r()
-		// closing tag
-		.regExp(/^\s*<\/([\w-_]+)\s*>/, false, function(descriptor, cap) {
-			if (descriptor.tagName !== cap[1].toLowerCase())
-				throw new Error('tag badly closed : ' + cap[1] + ' - (at opening : ' + descriptor.tagName + ')');
-		}),
-
-	innerScript: r()
-		.done(function(string, descriptor) {
-			var index = string.indexOf('</script>');
-			if (index == -1)
-				throw new Error('script tag badly closed.');
-			if (index)
-				descriptor.scriptContent = string.substring(0, index);
-			return string.substring(index + 9);
-		}),
-	// END common rules
-
-	// tag children
-	children: r()
-		.zeroOrMore(null,
-			r().oneOf([
-				r().space().rule('comment').skip(),
-				r().space().rule('tag'),
-				r().rule('text')
-			])
-		),
-
-	text: r().regExp(/^[^<]+/, false, function(descriptor, cap) {
-		descriptor.text(cap[0]);
-	}),
-
-	tag: r()
-		.regExp(/^<([\w-_]+)\s*/, false, function(descriptor, cap) {
-			descriptor.tagName = cap[1].toLowerCase();
-		})
-		.done(function(string, descriptor) {
-			descriptor._attributesTemplate = new Template();
-			return this.exec(string, descriptor._attributesTemplate, this.rules.attributes);
-		})
-		.oneOf([
-			r().char('>')
-			.done(function(string, descriptor) {
-				// check html5 unstrict self-closing tags
-				if (this.rules.openTags.test(descriptor.tagName))
-					return string; // no children
-
-				if (descriptor.tagName === 'script') // get script content
-					return this.exec(string, descriptor, this.rules.innerScript);
-
-				// get inner tag content
-				descriptor._eachTemplate = new Template();
-				var ok = this.exec(string, descriptor._eachTemplate, this.rules.children); // to _eachTemplate
-				if (ok === false)
-					return false;
-				// close tag
-				return this.exec(ok, descriptor, this.rules.tagEnd);
-			}),
-			// strict self closed tag
-			r().regExp(/^\/>/)
-		])
-		.done(function(string, descriptor) {
-			var eachTemplate = descriptor._eachTemplate,
-				attributesTemplate = descriptor._attributesTemplate;
-			if (eachTemplate)
-				if (!attributesTemplate._hasEach)
-					attributesTemplate._queue = attributesTemplate._queue.concat(eachTemplate._queue);
-				else
-					attributesTemplate._queue.unshift({
-						// small hack to define _eachTemplate in virtual or DOM element before 'each' execution
-						type: 'done',
-						fn: function(string) {
-							this._eachTemplate = eachTemplate;
-							return string;
-						}
-					});
-			descriptor.tag(descriptor.tagName, attributesTemplate);
-			delete descriptor._attributesTemplate;
-			delete descriptor._eachTemplate;
-			delete descriptor.tagName;
-			return string;
-		}),
-
-	attributes: r().zeroOrMore(null,
-		r().regExp(/^([\w-_]+)\s*(?:=(?:"([^"]*)"|([\w-_]+)))?\s*/, false, function(descriptor, cap) {
-			var attrName = cap[1],
-				value = (cap[2] !== undefined) ? cap[2] : ((cap[3] !== undefined) ? cap[3] : '');
-
-			switch (attrName) {
-				case 'class':
-					if (!value)
-						break;
-					value.split(/\s+/).forEach(function(cl) {
-						descriptor.setClass(cl);
-					});
-					break;
-				case 'data-template':
-					if (!value)
-						break;
-					var template = expression.parseTemplate(value);
-					if (template !== false) {
-						descriptor._queue = descriptor._queue.concat(template._queue);
-						descriptor._hasEach = descriptor._hasEach || template._hasEach;
-					} else
-						throw new Error('data-template attribute parsing failed : ' + value);
-					break;
-				case 'id':
-					if (!value)
-						break;
-					descriptor.id(value);
-					break;
-				default:
-					descriptor.attr(attrName, value);
-					break;
-			}
-		})
-	)
-};
-
-var parser = new Parser(rules, 'children');
-
-parser.createDescriptor = function() {
-	return new Template();
-};
-
-module.exports = parser;
-
-},{"../template":16,"./open-tags":13,"./string-to-template":14,"elenpi":1}],13:[function(require,module,exports){
-module.exports = /(br|input|img|area|base|col|command|embed|hr|img|input|keygen|link|meta|param|source|track|wbr)/;
-
-},{}],14:[function(require,module,exports){
-/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-
-var elenpi = require('elenpi'),
-	r = elenpi.r,
-	Parser = elenpi.Parser,
-	Template = require('../template');
-
-var rules = {
-	doublestring: r().regExp(/^"([^"]*)"/, false, function(descriptor, cap) {
-		descriptor.arguments.push(cap[1]);
-	}),
-	singlestring: r().regExp(/^'([^']*)'/, false, function(descriptor, cap) {
-		descriptor.arguments.push(cap[1]);
-	}),
-	'float': r().regExp(/^[0-9]*\.[0-9]+/, false, function(descriptor, cap) {
-		descriptor.arguments.push(parseFloat(cap[0], 10));
-	}),
-	integer: r().regExp(/^[0-9]+/, false, function(descriptor, cap) {
-		descriptor.arguments.push(parseInt(cap[0], 10));
-	}),
-	bool: r().regExp(/^(true|false)/, false, function(descriptor, cap) {
-		descriptor.arguments.push((cap[1] === 'true') ? true : false);
-	}),
-
-	//_____________________________________
-	// click('addUser').div(p().h(1,'hello'))
-	templates: r()
-		.space()
-		.zeroOrMore('calls',
-			r().rule('template'),
-			r().regExp(/^\s*\.\s*/)
-		)
-		.done(function(string, descriptor) {
-			var t;
-			if (descriptor.calls)
-				t = compile(descriptor.calls);
-			if (t && descriptor.arguments) {
-				descriptor.arguments.push(t);
-				delete descriptor.calls;
-			} else
-				descriptor.calls = t;
-			return string;
-		}),
-
-	template: r()
-		.regExp(/^[\w-_]+/, false, function(descriptor, cap) {
-			descriptor.method = cap[0];
-			descriptor.arguments = [];
-		})
-		.zeroOrOne(null,
-			r()
-			.regExp(/^\s*\(\s*/)
-			.zeroOrMore(null,
-				r().oneOf(['integer', 'float', 'bool', 'singlestring', 'doublestring', 'templates']),
-				r().regExp(/^\s*,\s*/)
-			)
-			.regExp(/^\s*\)/)
-		)
-};
-
-var parser = new Parser(rules, 'templates');
-
-function compile(calls) {
-	var ch = new Template();
-	for (var i = 0, len = calls.length; i < len; ++i) {
-		var call = calls[i];
-		if (!ch[call.method])
-			throw new Error('no handler found in Template as : ' + call.method);
-		ch[call.method].apply(ch, call.arguments);
-	}
-	return ch;
-}
-
-var templateCache = {};
-
-parser.parseTemplate = function(string) {
-	if (templateCache[string] !== undefined)
-		return templateCache[string].calls;
-	var result = templateCache[string] = parser.parse(string);
-	if (result === false)
-		return false;
-	return result.calls;
-};
-
-module.exports = parser;
-
-/*
-console.log(y.expression.parseTemplate("click ( '12', 14, true, p(2, 4, span( false).p())). div(12345)"));
- */
-
-},{"../template":16,"elenpi":1}],15:[function(require,module,exports){
+},{"./env":6,"./filter":7}],9:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 /**
  * Pure Virtual Node
@@ -1401,7 +858,7 @@ PureNode.prototype  = {
 
 module.exports = PureNode;
 
-},{}],16:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 (function() {
@@ -2137,7 +1594,7 @@ module.exports = PureNode;
 	module.exports = Template;
 })();
 
-},{"./container":5,"./context":6,"./env":8,"./interpolable":10,"./pure-node":15,"./utils":17}],17:[function(require,module,exports){
+},{"./container":3,"./context":4,"./env":6,"./interpolable":8,"./pure-node":9,"./utils":11}],11:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 //__________________________________________________________ UTILS
 
@@ -2357,7 +1814,7 @@ module.exports = {
 	}
 }
 
-},{}],18:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -2403,5 +1860,5 @@ delete View.prototype.contentEditable;
 
 module.exports = View;
 
-},{"./container":5,"./context":6,"./template":16,"./utils":17}]},{},[3])(3)
+},{"./container":3,"./context":4,"./template":10,"./utils":11}]},{},[1])(1)
 });
