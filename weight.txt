@@ -1,0 +1,17 @@
+
++ min-history 6.3 Ko min
+
+125 K full
+62  K min
+19  K gz
+	rql, router (route-dsl), aright, loader (c3po), http-request, uploader, date
+
+69 K full
+35 K min
+10 K gz
+	html, dom, elenpi
+
+54 K  full
+28 K  min
+8  K  gz
+	pure-node, virtual, container, context, emitter, filter, interpolable, template, view, async

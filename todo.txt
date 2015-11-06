@@ -1,0 +1,80 @@
+	TODO : 
+		parsing 
+			from DOM
+				still data-*
+			from String 				OK
+
+		 .disabled 						OK
+
+		if('!initialised', ..., ...) 		OK
+
+		integrate filters and expressions
+
+		request and c3po-bridge 			OK
+
+		model validation  					OK
+
+		route 								OK	
+
+		views pool 							OK		
+
+		collection filtering view 				OK
+
+		.client( t1, t2, ...)					OK
+		.server(t1, t2, ...) 					OK
+
+		promise management : catch end render / load 		OK
+		
+		mount/umount event 						OK
+
+		y.dependent('bloupi', 'foo', function(bloupi, foo){});				OK
+		
+
+		y.applyToDOM(node | selector, template)		==> apply template on dom element (select it if selector)
+
+		eventListeners : click(addUser(user)) : should retrieve user before feeding addUser
+
+
+
+	Should :
+
+		rename _yamvish_binds in _binds 					OK
+		rename all privates vars with _*
+
+		for each template handler : 
+		add args in queue (through done) and place inner functions outside : no more closure
+
+	Eacher : 
+		==> maybe introduce special token/tag/comment for each/filter/sort 
+			=> it resolves the html/js template equivalence
+		e.g. 
+
+			<div ...>
+				<h1>...</h1>
+				<each:users filter="name" sort="lastname">
+						
+
+				</each>
+				...
+				<each:events>
+					
+
+				</each>
+				...
+				<todo-list:todoId  />
+			</div>
+
+
+
+	ES5/6
+
+
+		arrows everywhere
+
+		arguments manip
+
+		simple interpolation
+
+		classes
+
+		...
