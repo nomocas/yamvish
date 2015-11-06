@@ -1,11 +1,11 @@
 {
   "name": "yamvish",
   "main": "index.js",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "authors": [
     "Gilles Coomans <gilles.coomans@gmail.com>"
   ],
-  "description": "Yet Another MVish-not-a-framework javascript library",
+  "description": "Yet Another MVish javascript library",
   "moduleType": [
     "amd",
     "globals",

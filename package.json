@@ -1,7 +1,7 @@
 {
   "name": "yamvish",
-  "version": "0.2.2",
-  "description": "Yet Another MVish-not-a-framework javascript library",
+  "version": "0.3.0",
+  "description": "Yet Another MVish javascript library",
   "main": "index.js",
   "directories": {
     "test": "test"
