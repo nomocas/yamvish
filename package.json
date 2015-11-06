@@ -7,7 +7,10 @@
     "test": "test"
   },
   "scripts": {
-    "test": "mocha"
+    "test": "mocha",
+    "build": "npm run build-core && npm run build-yamvish && gulp uglify",
+    "build-yamvish": "browserify -s y index.js > dist/yamvish.js",
+    "build-core": "browserify -s y core.js > dist/yamvish.core.js"
   },
   "repository": {
     "type": "git",
@@ -38,11 +41,6 @@
     "jshint-stylish": "^1.0.1"
   },
   "dependencies": {
-    "aright": "^0.1.2",
-    "c3po": "^1.0.1",
-    "elenpi": "^0.2.5",
-    "min-history": "^0.1.4",
-    "orql": "^0.1.0",
-    "routedsl": "^0.1.0"
+    "elenpi": "^0.2.5"
   }
 }
