@@ -36,6 +36,14 @@
 
 
 
+
+		Template.prototype.toContext(?context)
+
+			==> produce context tree and apply all context's vars handling
+
+
+
+
 	Should :
 
 		rename _yamvish_binds in _binds 					OK
