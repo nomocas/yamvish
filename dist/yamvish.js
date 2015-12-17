@@ -203,7 +203,7 @@
         parse: function(string, rule, opt) {
             var descriptor = this.createDescriptor ? this.createDescriptor() : {};
             var ok = this.exec(string, descriptor, rule, opt);
-            if (ok === false || ok.length > 0)
+            if (ok === false || (ok && ok.length > 0))
                 return false;
             return descriptor;
         }
@@ -229,18 +229,24 @@
 var y = function(t) {
 	return new y.Template(t);
 };
+
 y.env = require('./lib/env');
 y.utils = require('./lib/utils');
 y.Context = require('./lib/context');
 y.Template = require('./lib/template');
 y.PureNode = require('./lib/pure-node');
-// y.Virtual = require('./lib/virtual');
 y.Container = require('./lib/container');
 y.Filter = require('./lib/filter');
-y.View = require('./lib/view');
 var interpolable = require('./lib/interpolable');
 y.interpolable = interpolable.interpolable;
 y.Interpolable = interpolable.Interpolable;
+
+
+y.addToApi = function(api, name, args, method) {
+
+};
+
+
 
 module.exports = y;
 
@@ -252,20 +258,24 @@ module.exports = y;
 
  */
 
-},{"./lib/container":5,"./lib/context":6,"./lib/env":8,"./lib/filter":9,"./lib/interpolable":10,"./lib/pure-node":15,"./lib/template":16,"./lib/utils":17,"./lib/view":18}],3:[function(require,module,exports){
+},{"./lib/container":5,"./lib/context":6,"./lib/env":8,"./lib/filter":9,"./lib/interpolable":10,"./lib/pure-node":17,"./lib/template":18,"./lib/utils":19}],3:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var y = require('./core');
 
 
+y.Virtual = require('./lib/virtual');
+y.View = require('./lib/view');
+
 // parsers
 y.elenpi = require('elenpi');
 y.dom = require('./lib/parsers/dom-to-template');
 y.html = require('./lib/parsers/html-string-to-template');
+y.listenerParser = require('./lib/parsers/listener-call');
 
 module.exports = y;
 
-},{"./core":2,"./lib/parsers/dom-to-template":11,"./lib/parsers/html-string-to-template":12,"elenpi":1}],4:[function(require,module,exports){
+},{"./core":2,"./lib/parsers/dom-to-template":11,"./lib/parsers/html-string-to-template":12,"./lib/parsers/listener-call":13,"./lib/view":20,"./lib/virtual":21,"elenpi":1}],4:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 var Emitter = require('./emitter'),
 	utils = require('./utils');
@@ -351,7 +361,7 @@ utils.mergeProto(Emitter.prototype, AsyncManager.prototype);
 
 module.exports = AsyncManager;
 
-},{"./emitter":7,"./utils":17}],5:[function(require,module,exports){
+},{"./emitter":7,"./utils":19}],5:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -386,6 +396,7 @@ Container.prototype  = {
 		if (!node)
 			throw new Error('yamvish : mount point not found : ' + selector);
 		this.mountPoint = node;
+		// console.log('Container.mount : ', this, selector);
 		if (!mode) // mount as innerHTML : empty node before appending
 			utils.emptyNode(node);
 
@@ -407,6 +418,7 @@ Container.prototype  = {
 		return this.dispatchEvent('unmounted', this);
 	},
 	destroy: function() {
+		// console.log('Container destroy :', this);
 		if (this.destroyed)
 			return this;
 		this.dispatchEvent('destroy', this);
@@ -418,13 +430,18 @@ Container.prototype  = {
 		this.context = null;
 		this.mountPoint = null;
 		this.mountSelector = null;
-		if (this._route)
+		if (this._route) {
+			if (this._route.unbind)
+				this._route.unbind();
 			this._route = null;
+		}
 	},
 	hide: function() {
 		if (this.destroyed)
 			return this;
 		this.childNodes.forEach(function(child) {
+			if (!child.style)
+				child.style = {};
 			child.style.display = 'none';
 		});
 	},
@@ -432,7 +449,8 @@ Container.prototype  = {
 		if (this.destroyed)
 			return this;
 		this.childNodes.forEach(function(child) {
-			child.style.display = '';
+			if (child.style)
+				child.style.display = '';
 		});
 	},
 	done: function(success, error) {
@@ -464,7 +482,7 @@ Container.prototype.removeChild = function(child) {
 
 module.exports = Container;
 
-},{"./emitter":7,"./pure-node":15,"./utils":17}],6:[function(require,module,exports){
+},{"./emitter":7,"./pure-node":17,"./utils":19}],6:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -499,13 +517,28 @@ Context.prototype = {
 		this.data = null;
 		this.map = null;
 	},
+	get: function(path) {
+		if (!path.forEach)
+			path = path.split('.');
+		if (path[0] === '$this' && path.length === 1)
+			return this.data;
+		else if (path[0] == '$parent') {
+			if (!this.parent)
+				throw new Error('yamvish.Context : there is no parent in current context. could not find : ' + path.join('.'));
+			return this.parent.get(path.slice(1));
+		}
+		var r = utils.getProp(this.data, path);
+		if (r === undefined)
+			return '';
+		return r;
+	},
 	dependent: function(path, dependencies, func) {
 		var argsOutput = [],
 			willFire,
 			self = this;
 		dependencies.forEach(function(dependency) {
 			// subscribe to arguments[i]
-			(this.binds = this.binds || []).push(this.subscribe(dependency, function(type, p, value, key) {
+			self._binds.push(self.subscribe(dependency, function(type, p, value, key) {
 				if (!willFire)
 					willFire = self.delay(function() {
 						if (willFire) {
@@ -522,19 +555,30 @@ Context.prototype = {
 						}
 					}, 0);
 			}));
-			argsOutput.push(this.get(dependency));
+			argsOutput.push(self.get(dependency));
 		});
 		this.set(path, func.apply(this, argsOutput));
 		return this;
 	},
 	reset: function(data) {
+		if (data === this.data || (this.data instanceof Date && data instanceof Date && this.data.valueOf() === data.valueOf()))
+			return this;
 		this.data = data || {};
 		this.notifyAll('reset', null, this.map, data, '*');
 		return this;
 	},
-	toggle: function(path) {
+	toggle: function(path, value) {
 		this.set(path, !this.get(path));
 		return this;
+	},
+	toggleInArray: function(path, value) {
+		var arr = this.get(path);
+		for (var i = 0, len = arr.length; i < len; ++i)
+			if (arr[i] === value) {
+				this.del(path + '.' + i)
+				return this;
+			}
+		return this.push(path, value);
 	},
 	set: function(path, value) {
 		if (!path.forEach)
@@ -547,8 +591,11 @@ Context.prototype = {
 			throw new Error('yamvish.Context : there is no parent in current context. could not find : ' + path.join('.'));
 		}
 		var old = utils.setProp(this.data, path, value);
-		if (old !== value)
+		if (old !== value) {
+			if (old instanceof Date && value instanceof Date && old.valueOf() === value.valueOf())
+				return this;
 			this.notify('set', path, value, path[path.length - 1]);
+		}
 		return this;
 	},
 	push: function(path, value) {
@@ -595,23 +642,10 @@ Context.prototype = {
 			}
 		return this;
 	},
-	get: function(path) {
-		if (!path.forEach)
-			path = path.split('.');
-		if (path[0] === '$this' && path.length === 1)
-			return this.data;
-		else if (path[0] == '$parent') {
-			if (!this.parent)
-				throw new Error('yamvish.Context : there is no parent in current context. could not find : ' + path.join('.'));
-			return this.parent.get(path.slice(1));
-		}
-
-		var r = utils.getProp(this.data, path);
-		if (r === undefined)
-			return '';
-		return r;
-	},
 	subscribe: function(path, fn, upstream) {
+		// console.log('context subscribe : ', path, fn, upstream);
+		if (!fn)
+			throw new Error('subscribe need function');
 		if (!path.forEach)
 			path = path.split('.');
 		var space;
@@ -670,7 +704,13 @@ Context.prototype = {
 		value = (arguments.length < 2) ? this.data : value;
 		if (space._listeners)
 			for (var i = 0, len = space._listeners.length; i < len; ++i) {
-				var r = space._listeners[i](type, path, value, index);
+				var listener = space._listeners[i];
+				if (!listener) {
+					// maybe it's because listeners length has change so update it
+					len = space._listeners.length;
+					continue;
+				}
+				var r = listener.call(this, type, path, value, index);
 				if (r && r.then)
 					this.waiting(r);
 			}
@@ -686,7 +726,7 @@ Context.prototype = {
 		if (!path.forEach)
 			path = path.split('.');
 		if (path[0] === '$this')
-			path = [];
+			path = path.slice(1);
 		var space = this.map,
 			i = 0,
 			star;
@@ -714,6 +754,16 @@ Context.prototype = {
 			console.error('error while Context.setAsync : ', e);
 			throw e;
 		}));
+	},
+	pushAsync: function(path, promise) {
+		var self = this;
+		return this.waiting(promise.then(function(s) {
+			self.push(path, s);
+			return s;
+		}, function(e) {
+			console.error('error while Context.pushAsync : ', e);
+			throw e;
+		}));
 	}
 };
 
@@ -721,7 +771,13 @@ utils.mergeProto(AsyncManager.prototype, Context.prototype);
 
 function notifyUpstreams(space, type, path, value, index) {
 	for (var i = 0, len = space._upstreams.length; i < len; ++i) {
-		var r = space._upstreams[i](type, path, value, index);
+		var upstream = space._upstreams[i];
+		if (!upstream) {
+			// maybe it's because upstreams length has change so update it
+			len = space._upstreams.length;
+			continue;
+		}
+		var r = upstream.call(this, type, path, value, index);
 		if (r && r.then)
 			this.waiting(r);
 	}
@@ -729,7 +785,7 @@ function notifyUpstreams(space, type, path, value, index) {
 
 module.exports = Context;
 
-},{"./async":4,"./utils":17}],7:[function(require,module,exports){
+},{"./async":4,"./utils":19}],7:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 /**
@@ -742,17 +798,20 @@ module.exports = Context;
 var Emitter = function() {}
 Emitter.prototype = {
 	addEventListener: function(event, fct) {
+		event = (typeof event === 'object' ? event.type : event);
 		this._events = this._events || {};
 		(this._events[event] = this._events[event] || []).push(fct);
 		return this;
 	},
 	removeEventListener: function(event, fct) {
+		event = (typeof event === 'object' ? event.type : event);
 		if (!this._events || (event in this._events === false))
 			return this;
 		this._events[event].splice(this._events[event].indexOf(fct), 1);
 		return this;
 	},
 	dispatchEvent: function(event /* , args... */ ) {
+		event = (typeof event === 'object' ? event.type : event);
 		if (!this._events || (event in this._events === false))
 			return this;
 		for (var i = 0; i < this._events[event].length; i++)
@@ -764,8 +823,8 @@ module.exports = Emitter;
 
 },{}],8:[function(require,module,exports){
 (function (global){
-var env = function() {
-	return Promise.context || env.global;
+function env() {
+	return /*Promise.context || */ env.global;
 };
 
 var isServer = (typeof window === 'undefined') && (typeof document === 'undefined');
@@ -773,8 +832,6 @@ var isServer = (typeof window === 'undefined') && (typeof document === 'undefine
 env.global = {
 	isServer: isServer,
 	debug: false,
-	templates: {},
-	views: {},
 	api: {},
 	expressionsGlobal: isServer ? global : window,
 	factory: isServer ? null : document
@@ -789,6 +846,8 @@ module.exports = env;
 function Filter(f) {
 	this._queue = f ? f._queue.slice() : [];
 };
+
+var truncateRegExp = /^(?:[\w'"\(\),]+\s*){0,10}/;
 
 Filter.prototype = {
 	//_____________________________ APPLY filter on input
@@ -827,6 +886,13 @@ Filter.prototype = {
 			return JSON.stringify.apply(JSON, pretty ? [input, null, ' '] : [input]);
 		});
 		return this;
+	},
+	truncate: function() {
+		this._queue.push(function(input) {
+			var match = truncateRegExp.exec(input);
+			return match ? (match[0] + '...') : input;
+		});
+		return this;
 	}
 };
 
@@ -855,7 +921,7 @@ url_decode
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 var env = require('./env'),
 	Filter = require('./filter'),
-	replacementRegExp = /true|false|null|\$\.(?:[a-zA-Z]\w*(?:\.\w*)*)|\$this(?:\.\w*)*|\$parent(?:\.\w*)+|\$(?:[a-zA-Z]\w*(?:\.\w*)*)|"[^"]*"|'[^']*'|[a-zA-Z_]\w*(?:\.\w*)*/g;
+	replacementRegExp = /true|false|null|\$\.(?:[a-zA-Z]\w*(?:\.\w*)*)|\$this(?:\.\$?\w*)*|\$parent(?:\.\$?\w*)+|\$(?:[a-zA-Z]\w*(?:\.\w*)*)|"[^"]*"|'[^']*'|[a-zA-Z_]\w*(?:\.\w*)*/g;
 
 function tryExpr(func, context) {
 	if (!context)
@@ -868,51 +934,56 @@ function tryExpr(func, context) {
 	}
 }
 
+var cache = {};
+
 // analyse and produce xpr func
-function xpr(expr, filter, dependencies) {
+function compileExpression(expr, filter, dependencies) {
 	// console.log('xpr parse : ', expr);
+	var total = expr + filter;
+	if (cache[total])
+		return cache[total];
 	expr = expr.replace(replacementRegExp, function(whole) {
 		if (whole == 'true' || whole == 'false' ||  whole == 'null')
 			return whole;
 		switch (whole[0]) {
+			case '"':
+			case "'":
+				return whole;
 			case '$':
 				if (whole[1] === '.')
 					return '__global' + whole.substring(1);
 				else {
 					dependencies.push(whole);
-					return '__context.get("' + whole + '")';
+					return '__context.get(["' + whole.split('.').join('","') + '"])';
 				}
-			case '"':
-			case "'":
-				return whole;
 			default:
 				dependencies.push(whole);
-				return '__context.get("' + whole + '")';
+				return '__context.get(["' + whole.split('.').join('","') + '"])';
 		}
 	});
+	// console.log('xpr parsing res : ', expr);
 
 	var func = new Function("__context", "__global", "return " + expr + ";");
 	if (!filter)
-		return func;
+		return cache[total] = func;
 	// produce filter 
 	var fltr = new Function('Filter', 'return new Filter().' + filter)(Filter);
 	// wrap expr func with filter
-	return function(__context, __global) {
-		return fltr.call(this, func.call(this, __context, __global));
+	return cache[total] = function(context, global) {
+		return fltr.call(this, func.call(this, context, global));
 	};
 }
 
 // produce context's subscibtion event handler
 function handler(instance, context, func, index, callback) {
 	return function(type, path, newValue) {
+		instance.results[index] = tryExpr(func, context);
 		if (instance.dependenciesCount === 1) {
-			instance.results[index] = tryExpr(func, context);
 			callback(type, path, instance.output(context));
 		} else if (!instance.willFire)
 			instance.willFire = context.delay(function() { // allow small time to manage other dependencies update without multiple rerender
 				if (instance.willFire) {
 					instance.willFire = null;
-					instance.results[index] = tryExpr(func, context);
 					callback(type, path, instance.output(context));
 				}
 			}, 0);
@@ -938,10 +1009,18 @@ var Instance = function(interpolable) {
 	this.willFire = null;
 	this.parts = interpolable.parts;
 	this.dependenciesCount = interpolable.dependenciesCount;
+	this.directOutput = interpolable.directOutput;
+	this._strict = interpolable._strict;
 };
 
 // produce interpolable output
 Instance.prototype.output = function(context) {
+	if (this.directOutput) {
+		if (this.outputed)
+			return this.results[0];
+		this.outputed = true;
+		return this.results[0] = this.directOutput(context);
+	}
 	var out = '',
 		odd = true,
 		count = 0;
@@ -963,10 +1042,11 @@ Instance.prototype.output = function(context) {
 
 // Constructor
 var Interpolable = function(splitted, strict) {
+	// console.log('Interpolabe : splitted : ', splitted);
 	this.__interpolable__ = true;
 	this._strict = strict || false;
 	var dp;
-	if (splitted.length === 5 && splitted[0] === "" && splitted[2] === "")
+	if (splitted.length === 5 && splitted[0] === "" && splitted[4] === "")
 		this.directOutput = directOutput;
 	// interpolable string
 	this.parts = [];
@@ -980,7 +1060,7 @@ var Interpolable = function(splitted, strict) {
 		}
 		var dp = [];
 		this.parts.push({
-			func: xpr(splitted[i], splitted[i + 2], dp),
+			func: compileExpression(splitted[i], splitted[i + 2], dp),
 			dep: dp
 		});
 		i += 2;
@@ -1033,23 +1113,24 @@ Interpolable.prototype = {
 };
 
 var splitRegEx = /\{\{\s*(.+?)((?:(?:\s\|\s)(.+?))?)\s*\}\}/;
-// check if a string is interpolable. if so : return new Interpolable. else return original string.
-function interpolable(string, strict) {
-	if (typeof string !== 'string')
-		return string;
-	var splitted = string.split(splitRegEx);
-	if (splitted.length == 1)
-		return string; // string is not interpolable
-	return new Interpolable(splitted, strict);
-};
 
 module.exports = {
-	interpolable: interpolable,
+	// check if a string is interpolable. if so : return new Interpolable. else return original string.
+	interpolable: function(string, strict) {
+		if (typeof string !== 'string')
+			return string;
+		var splitted = string.split(splitRegEx);
+		if (splitted.length == 1)
+			return string; // string is not interpolable
+		return new Interpolable(splitted, strict);
+	},
 	Interpolable: Interpolable
 };
 
 },{"./env":8,"./filter":9}],11:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
+var Template = require('../template');
+
 // var expression = require('./string-to-template');
 //_______________________________________________________ DOM PARSING
 
@@ -1060,7 +1141,7 @@ module.exports = {
  * @return {[type]}         [description]
  */
 function elementChildrenToTemplate(element, template) {
-	var t = template || new this.Template();
+	var t = template || new Template();
 	for (var i = 0, len = element.childNodes.length; i < len; ++i)
 		elementToTemplate(element.childNodes[i], t);
 	return t;
@@ -1073,12 +1154,12 @@ function elementChildrenToTemplate(element, template) {
  * @return {[type]}         [description]
  */
 function elementToTemplate(element, template) {
-	var t = template || y();
+	var t = template || new Template();
 	switch (element.nodeType) {
 		case 1:
 			// if (element.tagName.toLowerCase() === 'script')
 			// console.log('CATCH script');
-			var childTemplate = new this.Template();
+			var childTemplate = new Template();
 			elementChildrenToTemplate(element, childTemplate);
 			if (element.id)
 				childTemplate.id(element.id)
@@ -1110,7 +1191,7 @@ module.exports = {
 	elementToTemplate: elementToTemplate
 };
 
-},{}],12:[function(require,module,exports){
+},{"../template":18}],12:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var elenpi = require('elenpi'),
@@ -1259,16 +1340,76 @@ parser.createDescriptor = function() {
 
 module.exports = parser;
 
-},{"../template":16,"./open-tags":13,"./string-to-template":14,"elenpi":1}],13:[function(require,module,exports){
-module.exports = /(br|input|img|area|base|col|command|embed|hr|img|input|keygen|link|meta|param|source|track|wbr)/;
-
-},{}],14:[function(require,module,exports){
+},{"../template":18,"./open-tags":14,"./string-to-template":16,"elenpi":1}],13:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var elenpi = require('elenpi'),
 	r = elenpi.r,
 	Parser = elenpi.Parser,
-	Template = require('../template');
+	primitiveArguments = require('./primitive-argument-rules');
+
+var rules = {
+	path: r()
+		.oneOrMore(null, r().regExp(/^[\w-_\$]+/, false, function(descriptor, cap) {
+			(descriptor.path = descriptor.path ||  []).push(cap[0]);
+		}), r().regExp(/^\./)),
+
+	call: r()
+		.rule('path')
+		.done(function(string, descriptor) {
+			descriptor.method = descriptor.path;
+			descriptor.path = null;
+			descriptor.arguments = [];
+			return string;
+		})
+		.zeroOrOne(null,
+			r()
+			.regExp(/^\s*\(\s*/)
+			.zeroOrMore(null,
+				r().oneOf(['integer', 'float', 'bool', 'singlestring', 'doublestring', r().rule('path')
+					.done(function(string, descriptor) {
+						descriptor.arguments.push(descriptor.path);
+						descriptor.path = null;
+						return string;
+					})
+				]),
+				r().regExp(/^\s*,\s*/)
+			)
+			.regExp(/^\s*\)/)
+		)
+};
+
+for (var i in primitiveArguments)
+	rules[i] = primitiveArguments[i];
+
+var parser = new Parser(rules, 'call');
+
+parser.parseListener = function(string) {
+	var parsed = this.parse(string);
+	if (!parsed.method)
+		throw new Error('yamvish listener badly formatted : ' + string);
+	return function(e) {
+		var handler = this.get(parsed.method);
+		if (!handler)
+			throw new Error('yamvish listener not found : ' + string);
+		if (!parsed.arguments)
+			return handler.call(this, e);
+		var args = [e];
+		for (var i = 0, len = parsed.arguments.length; i < len; ++i) {
+			var arg = parsed.arguments[i];
+			args.push(arg.forEach ? this.get(arg) : arg);
+		}
+		return handler.apply(this, args);
+	};
+};
+
+module.exports = parser;
+
+},{"./primitive-argument-rules":15,"elenpi":1}],14:[function(require,module,exports){
+module.exports = /(br|input|img|area|base|col|command|embed|hr|img|input|keygen|link|meta|param|source|track|wbr)/;
+
+},{}],15:[function(require,module,exports){
+var r = require('elenpi').r;
 
 var rules = {
 	doublestring: r().regExp(/^"([^"]*)"/, false, function(descriptor, cap) {
@@ -1285,8 +1426,21 @@ var rules = {
 	}),
 	bool: r().regExp(/^(true|false)/, false, function(descriptor, cap) {
 		descriptor.arguments.push((cap[1] === 'true') ? true : false);
-	}),
+	})
+};
 
+module.exports = rules;
+
+},{"elenpi":1}],16:[function(require,module,exports){
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
+
+var elenpi = require('elenpi'),
+	r = elenpi.r,
+	Parser = elenpi.Parser,
+	Template = require('../template'),
+	primitiveArguments = require('./primitive-argument-rules');
+
+var rules = {
 	//_____________________________________
 	// click('addUser').div(p().h(1,'hello'))
 	templates: r()
@@ -1323,6 +1477,9 @@ var rules = {
 		)
 };
 
+for (var i in primitiveArguments)
+	rules[i] = primitiveArguments[i];
+
 var parser = new Parser(rules, 'templates');
 
 function compile(calls) {
@@ -1353,7 +1510,7 @@ module.exports = parser;
 console.log(y.expression.parseTemplate("click ( '12', 14, true, p(2, 4, span( false).p())). div(12345)"));
  */
 
-},{"../template":16,"elenpi":1}],15:[function(require,module,exports){
+},{"../template":18,"./primitive-argument-rules":15,"elenpi":1}],17:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 /**
  * Pure Virtual Node
@@ -1401,7 +1558,7 @@ PureNode.prototype  = {
 
 module.exports = PureNode;
 
-},{}],16:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 (function() {
@@ -1412,8 +1569,10 @@ module.exports = PureNode;
 		env = require('./env'),
 		interpolable = require('./interpolable').interpolable,
 		PureNode = require('./pure-node'),
+		openTags = require('./parsers/open-tags'),
 		Container = require('./container'),
-		Context = require('./context');
+		Context = require('./context'),
+		listenerParser = require('./parsers/listener-call');
 
 	function StringOutputDescriptor() {
 		this.attributes = '';
@@ -1433,7 +1592,7 @@ module.exports = PureNode;
 			this._queue = [];
 	}
 
-	var y = function() {
+	function y() {
 		return new Template();
 	};
 
@@ -1541,6 +1700,11 @@ module.exports = PureNode;
 				context.set(path, value);
 			}, true);
 		},
+		setAsync: function(path, value) {
+			return this.exec(function(context) {
+				context.setAsync(path, value);
+			}, true);
+		},
 		dependent: function(path, args, func) {
 			return this.exec(function(context) {
 				context.dependent(path, args, func);
@@ -1549,6 +1713,21 @@ module.exports = PureNode;
 		push: function(path, value) {
 			return this.exec(function(context) {
 				context.push(path, value);
+			}, true);
+		},
+		pushAsync: function(path, value) {
+			return this.exec(function(context) {
+				context.pushAsync(path, value);
+			}, true);
+		},
+		toggle: function(path) {
+			return this.exec(function(context) {
+				context.toggle(path);
+			}, true);
+		},
+		toggleInArray: function(path) {
+			return this.exec(function(context) {
+				context.toggleInArray(path);
 			}, true);
 		},
 		del: function(path) {
@@ -1570,11 +1749,15 @@ module.exports = PureNode;
 		},
 		sub: function(path, handler, upstream) {
 			return this.exec(function(context) {
+				(this._binds = this._binds || []).push(context.subscribe(path, handler, upstream));
+			}, function(context) {
 				context.subscribe(path, handler, upstream);
 			});
 		},
 		unsub: function(path, handler, upstream) {
 			return this.exec(function(context) {
+				(this._binds = this._binds || []).push(context.unsubscribe(path, handler, upstream));
+			}, function(context) {
 				context.unsubscribe(path, handler, upstream);
 			});
 		},
@@ -1613,25 +1796,21 @@ module.exports = PureNode;
 		attr: function(name, value) {
 			if (typeof value === 'string')
 				value = interpolable(value);
-			(this._attributes = this._attributes || []).push({
-				name: name,
-				value: value
-			});
 			return this.exec(function(context) {
 				var self = this,
 					val = value;
 				if (value.__interpolable__) {
 					val = value.output(context);
-					(this._binds = this._binds || []).push(value.subscribeTo(context, function(type, path, newValue) {
+					var attributeUpdate = function(type, path, newValue) {
 						self.setAttribute(name, newValue);
-					}));
+					};
+					(this._binds = this._binds || []).push(value.subscribeTo(context, attributeUpdate));
 				}
 				this.setAttribute(name, val);
 			}, function(context, descriptor) {
 				descriptor.attributes += ' ' + name;
 				if (value)
 					descriptor.attributes += '="' + (value.__interpolable__ ? value.output(context) : value) + '"';
-				return '';
 			});
 		},
 		removeAttr: function(name) {
@@ -1726,34 +1905,42 @@ module.exports = PureNode;
 			});
 		},
 		setClass: function(name, flag) {
-			var invert = false;
-			if (flag && flag[0] === '!') {
-				flag = flag.substring(1);
-				invert = true;
-			}
+			if (flag)
+				flag = interpolable(flag);
+			name = interpolable(name);
+			flag = !arguments[1] ? true : flag;
 			return this.exec(function(context) {
-				var self = this;
-
-				function applyClass(type, path, newValue) {
-					if (invert)
-						newValue = !newValue;
+				var self = this,
+					classValue = name,
+					flagValue = flag;
+				var flagUpdate = function(type, path, newValue) {
+					// console.log('setClass : ', name, newValue);
+					flagValue = newValue;
 					if (newValue)
-						utils.setClass(self, name);
+						utils.setClass(self, classValue);
 					else
-						utils.removeClass(self, name);
+						utils.removeClass(self, classValue);
 				};
 
-				if (flag !== undefined) {
-					if (typeof flag === 'string') {
-						(this._binds = this._binds || []).push(context.subscribe(flag, applyClass));
-						applyClass('set', null, context.get(flag));
-					} else
-						applyClass('set', null, flag);
+				if (name.__interpolable__) {
+					var nameUpdate = function(type, path, newValue) {
+						if (flagValue) {
+							utils.removeClass(self, classValue);
+							utils.setClass(self, newValue);
+						}
+						classValue = newValue;
+					};
+					(this._binds = this._binds || []).push(name.subscribeTo(context, nameUpdate));
+					classValue = name.output(context);
+				}
+				if (flag.__interpolable__) {
+					(this._binds = this._binds || []).push(flag.subscribeTo(context, flagUpdate));
+					flagUpdate('set', null, flag.output(context));
 				} else
-					applyClass('set', null, true);
+					flagUpdate('set', null, flag);
 			}, function(context, descriptor) {
-				if (flag === undefined || (invert ? !context.get(flag) : context.get(flag)))
-					descriptor.classes += ' ' + name;
+				if ((flag.__interpolable__ && flag.output(context)) || flag)
+					descriptor.classes += ' ' + (name.__interpolable__ ? name.output(context) : name);
 			});
 		},
 		css: function(prop, value) {
@@ -1770,7 +1957,9 @@ module.exports = PureNode;
 							self.style[prop] = newValue;
 						}));
 					}
-					(this.style = this.style || {})[prop] = val;
+					if (!this.style)
+						this.style = {};
+					this.style[prop] = val;
 				},
 				// To String
 				function(context, descriptor) {
@@ -1779,11 +1968,7 @@ module.exports = PureNode;
 			);
 		},
 		visible: function(flag) {
-			var invert = false;
-			if (flag[0] === '!') {
-				flag = flag.substring(1);
-				invert = true;
-			}
+			flag = interpolable(flag);
 			return this.exec(
 				// to Element
 				function(context) {
@@ -1792,19 +1977,15 @@ module.exports = PureNode;
 						initial = (this.style ? this.style.display : '') || '';
 					if (!this.style)
 						this.style = {};
-					if (typeof flag === 'string') {
-						val = context.get(flag);
-						(this._binds = this._binds || []).push(context.subscribe(flag, function(type, path, newValue) {
-							if (invert)
-								newValue = !newValue;
+					if (flag.__interpolable__) {
+						val = flag.output(context);
+						(this._binds = this._binds || []).push(flag.subscribeTo(context, function(type, path, newValue) {
 							if (self.__yContainer__)
 								newValue ? self.show() : self.hide();
 							else
 								self.style.display = newValue ? initial : 'none';
 						}));
 					}
-					if (invert)
-						val = !val;
 					if (this.__yContainer__)
 						val ? this.show() : this.hide();
 					else
@@ -1812,9 +1993,7 @@ module.exports = PureNode;
 				},
 				// To String
 				function(context, descriptor) {
-					var val = typeof flag === 'string' ? context.get(flag) : flag;
-					if (invert)
-						val = !val;
+					var val = flag.__interpolable__ ? flag.output(context) : flag;
 					if (!val)
 						descriptor.style += 'display:none;';
 				}
@@ -1832,27 +2011,37 @@ module.exports = PureNode;
 			if (typeof value === 'string')
 				value = interpolable(value);
 			return this.exec(function(context) {
+				var envi = env();
 				var node;
 				if (value.__interpolable__) {
-					node = env().factory.createTextNode(value.output(context));
+					node = envi.factory.createTextNode(value.output(context));
 					(this._binds = this._binds || []).push(value.subscribeTo(context, function(type, path, newValue) {
 						if (node.__yVirtual__) {
 							node.nodeValue = newValue;
-							if (node.el)
+							if (node.el && node.el.nodeValue !== newValue)
 								node.el.nodeValue = newValue;
 						}
-						node.nodeValue = newValue;
+						if (node.nodeValue !== newValue)
+							node.nodeValue = newValue;
 					}));
 				} else
-					node = env().factory.createTextNode(value);
+					node = envi.factory.createTextNode(value);
 				this.appendChild(node);
 			}, function(context, descriptor) {
 				descriptor.children += value.__interpolable__ ? value.output(context) : value;
 			});
 		},
+		space: function() {
+			return this.text(' ');
+		},
+		nbsp: function() {
+			return this.text('\u00A0');
+		},
 		tag: function(name) { // arguments : name, template1, t2, ...
 			var args = [];
 			for (var i = 1, len = arguments.length; i < len; ++i) {
+				if (!arguments[i])
+					continue;
 				if (!arguments[i].call)
 					args.push(y().text(arguments[i]));
 				else
@@ -1895,6 +2084,10 @@ module.exports = PureNode;
 						out += ' class="' + newDescriptor.classes + '"';
 					if (newDescriptor.children)
 						descriptor.children += out + '>' + newDescriptor.children + '</' + name + '>';
+					else if (openTags.test(name))
+						descriptor.children += out + '>';
+					else if (/span|script|meta/.test(name))
+						descriptor.children += out + '></' + name + '>';
 					else
 						descriptor.children += out + '/>';
 				}
@@ -1903,6 +2096,11 @@ module.exports = PureNode;
 		a: function(href) {
 			var args = Array.prototype.slice.call(arguments, 1);
 			args.unshift('a', y().attr('href', href));
+			return this.tag.apply(this, args);
+		},
+		img: function(href) {
+			var args = Array.prototype.slice.call(arguments, 1);
+			args.unshift('img', y().attr('src', href));
 			return this.tag.apply(this, args);
 		},
 		input: function(type, value) {
@@ -1920,16 +2118,11 @@ module.exports = PureNode;
 		},
 		//___________________________________ EVENTS LISTENER
 		on: function(name, handler) {
+			if (typeof handler === 'string')
+				handler = listenerParser.parseListener(handler);
 			return this.exec(function(context) {
-				var h;
-				if (typeof handler === 'string') {
-					if (!context.data[handler])
-						throw utils.produceError('on(' + name + ') : no "' + handler + '" event handlers define in current context', this);
-					h = context.data[handler];
-				} else
-					h = handler;
 				this.addEventListener(name, function(evt) {
-					return h.call(context, evt);
+					return handler.call(context, evt);
 				});
 			});
 		},
@@ -1968,7 +2161,7 @@ module.exports = PureNode;
 					}
 
 					var render = function(type, path, value, index) {
-						if (path.forEach)
+						if (path && path.forEach)
 							path = path.join('.');
 						switch (type) {
 							case 'reset':
@@ -1987,13 +2180,15 @@ module.exports = PureNode;
 								// 	}
 								// 	// fragment = document.createDocumentFragment();
 								// }
+								var mountPoint = fragment || self.mountPoint || self;
+								nextSibling = fragment ? null : nextSibling;
 								for (var len = value.length; j < len; ++j) // reset existing or create new node 
 									if (container.childNodes[j]) // reset existing
 										container.childNodes[j].context.reset(value[j]);
 									else { // create new node
 										var child = push(value[j], promises);
 										if ((!self.__yPureNode__ || self.mountPoint) && child.childNodes)
-											utils.mountChildren(child, fragment || self.mountPoint || self, fragment ? null : nextSibling);
+											utils.mountChildren(child, mountPoint, nextSibling);
 									}
 									// fragment is used to append children (all in one time) without reflow
 									// if (fragment && fragment.children.length) {
@@ -2033,8 +2228,9 @@ module.exports = PureNode;
 					};
 					var data = path;
 					if (typeof path === 'string') {
-						(this._binds = this._binds || []).push(context.subscribe(path, render));
-						(this._binds = this._binds || []).push(context.subscribe(path + '.*', function(type, path, value, key) {
+						this._binds = this._binds || [];
+						this._binds.push(context.subscribe(path, render));
+						this._binds.push(context.subscribe(path + '.*', function(type, path, value, key) {
 							var node = container.childNodes[key];
 							if (node)
 								return node.context.reset(value);
@@ -2060,27 +2256,15 @@ module.exports = PureNode;
 				}
 			);
 		},
-		use: function(name) {
-			return this.exec(function(context, container) {
-				if (typeof name === 'string') {
-					var envi = env();
-					name = envi.templates[name] || envi.views[name];
-				}
-				if (!name)
-					throw new Error('no template/container found with "' + name + '"');
-				if (name.__yContainer__)
-					return name.mount(this, 'append');
-				else
-					return name.call(this, context, container);
-			}, function(context, descriptor, container) {
-				if (typeof name === 'string') {
-					var envi = env();
-					name = envi.templates[name] || envi.views[name];
-				}
-				if (!name)
-					throw new Error('no template/container found with "' + name + '"');
-				return name.toHTMLString(this, context, descriptor, container);
-			});
+		use: function(name, opt) {
+			if (typeof name === 'string')
+				name = name.split(':');
+			var method = (name.forEach ? utils.getApiMethod(name) : name);
+			if (method.__yTemplate__)
+				this._queue = this._queue.concat(method._queue);
+			else
+				method.call(this, opt);
+			return this;
 		},
 		client: function(templ) {
 			return this.exec(function(context, container) {
@@ -2093,6 +2277,7 @@ module.exports = PureNode;
 				return templ.toHTMLString(context, descriptor, container);
 			});
 		},
+
 		server: function(templ) {
 			return this.exec(function(context, container) {
 				if (!env().isServer)
@@ -2104,6 +2289,7 @@ module.exports = PureNode;
 				return templ.toHTMLString(context, descriptor, container);
 			});
 		},
+
 		api: function(name) {
 			var Api = (typeof name === 'string') ? env().api[name] : name;
 			if (!Api)
@@ -2114,11 +2300,130 @@ module.exports = PureNode;
 				this[i] = Api[i];
 			}
 			return this;
+		},
+
+		find: function(selector, handler) {
+			return this.exec(function(context, container) {
+				if (!this.querySelectorAll)
+					throw new Error('yamvish : you try to Template.find on node that doesn\'t have querySelectorAll');
+				var selected = this.querySelectorAll(selector),
+					promises = [];
+				for (var i = 0, len = selected.length; i < len; ++i) {
+					var p = handler.call(selected[i], context, container);
+					if (p && p.then)
+						promises.push(p);
+				}
+				if (promises.length)
+					return Promise.all(promises);
+			});
+		},
+
+		contentSwitch: function(xpr, map) {
+			xpr = interpolable(xpr);
+			return this.exec(function(context, container) {
+				var current, dico = utils.shallowCopy(map),
+					self = this;
+				var valueUpdate = function(type, path, value) {
+					if (!value) {
+						if (current)
+							current.unmount();
+						current = null;
+						return;
+					}
+					var templ = dico[value];
+					if (!templ)
+						throw new Error('yamvish contentSwitch : unrecognised value : ' + value);
+					if (current)
+						current.unmount();
+					current = null;
+					if (templ.__yContainer__)
+						current = templ.mount(self);
+					else if (typeof templ === 'string')
+						self.innerHTML = templ;
+					else
+						return (current = dico[value] = templ.toContainer(context).mount(self));
+				};
+				(this._binds = this._binds || []).push(xpr.subscribeTo(context, valueUpdate));
+				return valueUpdate('set', null, xpr.output(context));
+			}, function(context, descriptor, container) {
+
+			});
+		},
+
+		cssSwitch: function(cssVar, xpr, map) {
+			xpr = interpolable(xpr);
+			return this.exec(function(context, container) {
+				var dico = utils.shallowCopy(map),
+					self = this;
+				var valueUpdate = function(type, path, value) {
+					var entry = dico[value];
+					if (typeof entry === 'undefined')
+						throw new Error('yamvish cssSwitch : unrecognised value : ' + value);
+					if (typeof entry === 'function')
+						entry = entry.call(self, context, container);
+					if (typeof entry === 'undefined')
+						delete self.style[cssVar];
+					else
+						self.style[cssVar] = entry;
+				};
+				(this._binds = this._binds || []).push(xpr.subscribeTo(context, valueUpdate));
+				return valueUpdate('set', null, xpr.output(context));
+			}, function(context, descriptor, container) {
+
+			});
+		},
+
+		html: function(fragment, condition, success) {
+			condition = (typeof condition === 'undefined') ? true : condition;
+			condition = (typeof condition === 'string') ? interpolable(condition) : condition;
+			fragment = (typeof fragment === 'string') ? interpolable(fragment) : fragment;
+			return this.exec(function(context, container) {
+					var cond = condition,
+						content = fragment,
+						self = this;
+					if (fragment.__interpolable__) {
+						content = fragment.output(context);
+						var fragmentUpdate = function(type, path, value, index) {
+							content = value;
+							if (cond) {
+								self.innerHTML = content;
+								success.call(self, context, container);
+							}
+						};
+						(this._binds = this._binds || []).push(fragment.subscribeTo(context, fragmentUpdate));
+					}
+					if (condition && condition.__interpolable__) {
+						cond = condition.output(context);
+						var conditionUpdate = function(type, path, value, index) {
+							cond = value;
+							if (value) {
+								self.innerHTML = content;
+								success.call(self, context, container);
+							} else
+								self.innerHTML = '';
+						};
+						(this._binds = this._binds || []).push(condition.subscribeTo(context, conditionUpdate));
+					}
+					if (cond) {
+						self.innerHTML = content;
+						success.call(self, context, container);
+					}
+				},
+				function(context, descriptor, container) {
+
+				});
 		}
 	};
 
+	Template.addAPI = function(api) {
+		for (var i in api)
+			Template.prototype[i] = api[i];
+	};
+
+	Template.prototype.cl = Template.prototype.setClass;
+
 	// Complete tag list
-	['div', 'span', 'ul', 'li', 'button', 'p'].forEach(function(tag) {
+	['div', 'span', 'ul', 'li', 'button', 'p', 'form'].forEach(function(tag) {
 		Template.prototype[tag] = function() {
 			var args = Array.prototype.slice.call(arguments);
 			args.unshift(tag);
@@ -2126,7 +2431,7 @@ module.exports = PureNode;
 		};
 	});
 	// Complete events list
-	['click', 'blur', 'focus'].forEach(function(eventName) {
+	['click', 'blur', 'focus', 'submit'].forEach(function(eventName) {
 		Template.prototype[eventName] = function(handler) {
 			if (env().isServer)
 				return;
@@ -2137,7 +2442,7 @@ module.exports = PureNode;
 	module.exports = Template;
 })();
 
-},{"./container":5,"./context":6,"./env":8,"./interpolable":10,"./pure-node":15,"./utils":17}],17:[function(require,module,exports){
+},{"./container":5,"./context":6,"./env":8,"./interpolable":10,"./parsers/listener-call":13,"./parsers/open-tags":14,"./pure-node":17,"./utils":19}],19:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 //__________________________________________________________ UTILS
 
@@ -2228,8 +2533,11 @@ function destroyElement(node, removeFromParent) {
 		node._yamvish_containers = null;
 	if (node.context)
 		node.context.destroy();
-	if (node._route)
+	if (node._route) {
+		if (node._route.unbind)
+			node._route.unbind();
 		node._route = null;
+	}
 }
 
 function destroyChildren(node, removeFromParent) {
@@ -2354,10 +2662,35 @@ module.exports = {
 			return res;
 		}
 		return obj;
+	},
+	getEachTemplate: function(parent, templ) {
+		templ = templ || parent._eachTemplate;
+		if (!templ)
+			throw produceError('no template for .each template handler', parent);
+		return templ;
+	},
+	getApiMethod: function(path) {
+		if (!path.forEach)
+			path = path.split(':');
+		if (path.length !== 2)
+			throw new Error('yamvish method call badly formatted : ' + path.join(':'));
+		var envi = env(),
+			output = envi.api[splitted[0]][splitted[1]];
+		if (!output)
+			throw new Error('no template/container found with "' + path.join(':') + '"');
+		return output;
+	},
+	getFunctionArgs: function(func) {
+		return (func + '').replace(/\s+/g, '')
+			.replace(/[\/][*][^\/*]*[*][\/]/g, '') // strip simple comments  
+			.split('){', 1)[0].replace(/^[^(]*[(]/, '') // extract the parameters  
+			.replace(/=[^,]+/g, '') // strip any ES6 defaults  
+			.split(',')
+			.filter(Boolean); // split & filter [""]  
 	}
 }
 
-},{}],18:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -2403,5 +2736,96 @@ delete View.prototype.contentEditable;
 
 module.exports = View;
 
-},{"./container":5,"./context":6,"./template":16,"./utils":17}]},{},[3])(3)
+},{"./container":5,"./context":6,"./template":18,"./utils":19}],21:[function(require,module,exports){
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
+
+var utils = require('./utils'),
+	Emitter = require('./emitter'),
+	PureNode = require('./pure-node'),
+	openTags = require('./parsers/open-tags');
+
+//_______________________________________________________ VIRTUAL NODE
+
+/**
+ * Virtual Node
+ *
+ * A minimal mock of DOMElement. It gathers PureNode and Emitter API and add attributes management (add and remove).
+ * 
+ * @param {Object} option (optional) option object : { ?tagName:String, ?nodeValue:String } + options from PureNode
+ */
+function Virtual(opt /*tagName, context*/ ) {
+	opt = opt || {};
+	this.__yVirtual__ = true;
+	if (opt.tagName)
+		this.tagName = opt.tagName;
+	if (opt.nodeValue)
+		this.nodeValue = opt.nodeValue;
+	PureNode.call(this, opt);
+};
+
+Virtual.prototype  = {
+	setAttribute: function(name, value) {
+		(this.attributes = this.attributes || {})[name] = value;
+	},
+	removeAttribute: function(name, value) {
+		if (!this.attributes)
+			return;
+		delete this.attributes[name];
+	}
+};
+
+// apply inheritance
+utils.mergeProto(PureNode.prototype, Virtual.prototype);
+utils.mergeProto(Emitter.prototype, Virtual.prototype);
+
+/**
+ * Virtual to String output
+ * @return {String} the String representation of Virtual node
+ */
+Virtual.prototype.toString = function() {
+	if (this.tagName === 'textnode')
+		return this.nodeValue;
+	var node = '<' + this.tagName;
+	if (this.id)
+		node += ' id="' + this.id + '"';
+	for (var a in this.attributes)
+		node += ' ' + a + '="' + this.attributes[a] + '"';
+	if (this.classes) {
+		var classes = Object.keys(this.classes);
+		if (classes.length)
+			node += ' class="' + classes.join(' ') + '"';
+	}
+	if (this.childNodes && this.childNodes.length) {
+		node += '>';
+		for (var j = 0, len = this.childNodes.length; j < len; ++j)
+			node += this.childNodes[j].toString();
+		node += '</' + this.tagName + '>';
+	} else if (this.scriptContent)
+		node += '>' + this.scriptContent + '</script>';
+	else if (openTags.test(this.tagName))
+		node += '>';
+	else
+		node += ' />';
+	return node;
+};
+
+
+// Virtual Factory : mimic document.createElement but return a virtual node
+Virtual.createElement = function(tagName) {
+	return new Virtual({
+		tagName: tagName
+	});
+};
+
+// Virtual Factory : mimic document.createTextNode but return a virtual node
+Virtual.createTextNode = function(value) {
+	return new Virtual({
+		tagName: 'textnode',
+		nodeValue: value
+	});
+};
+
+module.exports = Virtual;
+
+},{"./emitter":7,"./parsers/open-tags":14,"./pure-node":17,"./utils":19}]},{},[3])(3)
 });
