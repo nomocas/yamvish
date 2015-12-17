@@ -231,13 +231,51 @@ view.set('active', true)
 
 ## API
 
-### Main Classes 
+### Template
+
+
+#### Instance
+
+Through yamvish shortcut :
+```javascript
+var y = require('yamvish');
+
+var template = y(); // using shortcut
+template.div('hello world');
+
+var template2 = new y.Template(); // using Template constructor
+template2.p('a paragraph');
+```
+
+#### exec
+
+Base function for all others
+Execute provided callbacks on current node or container.
+
+```javascript
+
+var template = y().exec(
+	// on node/container
+	function(context){
+		// "this" is current node or container
+		// 
+	},
+	// toHTMLString 
+	function(context, descriptor){
+		
+	}
+)
+
+var template2 = new y.Template(); // using Template constructor
+template2.p('a paragraph');
+```
+
 
 Templating chainable API
 - y.Template
-	- base : done, catch, if, all, destroy, remove
-	- context management : set, push, del, handler, context, with
-	- attributes : attr, setClass, id, val
+	- base : exec, if
+	- context management : set, setAsync, push, pushAsync, del, context, with, toggle, toggleInArray, sub, unsub, dependent
+	- attributes : attr, setClass, cl, id, val
 	- events : on, off + basical dom events (click, focus, blur, ...)
 	- tags : text, tag, div, ul, input, h, p, ...
 	- array loop : each, filter, sort
