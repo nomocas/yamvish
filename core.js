@@ -3,18 +3,25 @@
 var y = function(t) {
 	return new y.Template(t);
 };
+
 y.env = require('./lib/env');
 y.utils = require('./lib/utils');
 y.Context = require('./lib/context');
 y.Template = require('./lib/template');
 y.PureNode = require('./lib/pure-node');
-// y.Virtual = require('./lib/virtual');
 y.Container = require('./lib/container');
 y.Filter = require('./lib/filter');
-y.View = require('./lib/view');
 var interpolable = require('./lib/interpolable');
 y.interpolable = interpolable.interpolable;
 y.Interpolable = interpolable.Interpolable;
+y.Virtual = require('./lib/virtual');
+
+
+y.addToApi = function(api, name, args, method) {
+
+};
+
+
 
 module.exports = y;
 
