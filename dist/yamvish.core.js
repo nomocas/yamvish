@@ -240,6 +240,7 @@ y.Filter = require('./lib/filter');
 var interpolable = require('./lib/interpolable');
 y.interpolable = interpolable.interpolable;
 y.Interpolable = interpolable.Interpolable;
+y.Virtual = require('./lib/virtual');
 
 
 y.addToApi = function(api, name, args, method) {
@@ -258,7 +259,7 @@ module.exports = y;
 
  */
 
-},{"./lib/container":4,"./lib/context":5,"./lib/env":7,"./lib/filter":8,"./lib/interpolable":9,"./lib/pure-node":13,"./lib/template":14,"./lib/utils":15}],3:[function(require,module,exports){
+},{"./lib/container":4,"./lib/context":5,"./lib/env":7,"./lib/filter":8,"./lib/interpolable":9,"./lib/pure-node":13,"./lib/template":14,"./lib/utils":15,"./lib/virtual":16}],3:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 var Emitter = require('./emitter'),
 	utils = require('./utils');
@@ -612,16 +613,18 @@ Context.prototype = {
 				return this.parent.del(path.slice(1));
 			throw new Error('yamvish.Context : there is no parent in current context. could not find : ' + path.join('.'));
 		}
-		var key = path.pop(),
-			parent = path.length ? utils.getProp(this.data, path) : this.data;
+		var path2 = path.slice();
+		var key = path2.pop(),
+			parent = path2.length ? utils.getProp(this.data, path2) : this.data;
 		if (parent)
 			if (parent.forEach) {
 				var index = parseInt(key, 10);
-				parent.splice(index, 1);
-				this.notify('removeAt', path, null, index);
+
+				this.notify('removeAt', path2, parent.splice(index, 1), index);
 			} else {
+				var val = parent[key];
 				delete parent[key];
-				this.notify('delete', path, null, key);
+				this.notify('delete', path, val, key);
 			}
 		return this;
 	},
@@ -1947,14 +1950,16 @@ module.exports = PureNode;
 				}
 			);
 		},
-		use: function(name, opt) {
+		use: function(name) {
+			var args = Array.prototype.slice.call(arguments);
+			args.shift();
 			if (typeof name === 'string')
 				name = name.split(':');
-			var method = (name.forEach ? utils.getApiMethod(name) : name);
+			var method = (name.forEach ? utils.getApiMethod(env(), name) : name);
 			if (method.__yTemplate__)
 				this._queue = this._queue.concat(method._queue);
 			else
-				method.call(this, opt);
+				method.apply(this, args);
 			return this;
 		},
 		client: function(templ) {
@@ -2360,13 +2365,12 @@ module.exports = {
 			throw produceError('no template for .each template handler', parent);
 		return templ;
 	},
-	getApiMethod: function(path) {
+	getApiMethod: function(env, path) {
 		if (!path.forEach)
 			path = path.split(':');
 		if (path.length !== 2)
 			throw new Error('yamvish method call badly formatted : ' + path.join(':'));
-		var envi = env(),
-			output = envi.api[splitted[0]][splitted[1]];
+		var output = env.api[path[0]][path[1]];
 		if (!output)
 			throw new Error('no template/container found with "' + path.join(':') + '"');
 		return output;
@@ -2381,5 +2385,96 @@ module.exports = {
 	}
 }
 
-},{}]},{},[2])(2)
+},{}],16:[function(require,module,exports){
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
+
+var utils = require('./utils'),
+	Emitter = require('./emitter'),
+	PureNode = require('./pure-node'),
+	openTags = require('./parsers/open-tags');
+
+//_______________________________________________________ VIRTUAL NODE
+
+/**
+ * Virtual Node
+ *
+ * A minimal mock of DOMElement. It gathers PureNode and Emitter API and add attributes management (add and remove).
+ * 
+ * @param {Object} option (optional) option object : { ?tagName:String, ?nodeValue:String } + options from PureNode
+ */
+function Virtual(opt /*tagName, context*/ ) {
+	opt = opt || {};
+	this.__yVirtual__ = true;
+	if (opt.tagName)
+		this.tagName = opt.tagName;
+	if (opt.nodeValue)
+		this.nodeValue = opt.nodeValue;
+	PureNode.call(this, opt);
+};
+
+Virtual.prototype  = {
+	setAttribute: function(name, value) {
+		(this.attributes = this.attributes || {})[name] = value;
+	},
+	removeAttribute: function(name, value) {
+		if (!this.attributes)
+			return;
+		delete this.attributes[name];
+	}
+};
+
+// apply inheritance
+utils.mergeProto(PureNode.prototype, Virtual.prototype);
+utils.mergeProto(Emitter.prototype, Virtual.prototype);
+
+/**
+ * Virtual to String output
+ * @return {String} the String representation of Virtual node
+ */
+Virtual.prototype.toString = function() {
+	if (this.tagName === 'textnode')
+		return this.nodeValue;
+	var node = '<' + this.tagName;
+	if (this.id)
+		node += ' id="' + this.id + '"';
+	for (var a in this.attributes)
+		node += ' ' + a + '="' + this.attributes[a] + '"';
+	if (this.classes) {
+		var classes = Object.keys(this.classes);
+		if (classes.length)
+			node += ' class="' + classes.join(' ') + '"';
+	}
+	if (this.childNodes && this.childNodes.length) {
+		node += '>';
+		for (var j = 0, len = this.childNodes.length; j < len; ++j)
+			node += this.childNodes[j].toString();
+		node += '</' + this.tagName + '>';
+	} else if (this.scriptContent)
+		node += '>' + this.scriptContent + '</script>';
+	else if (openTags.test(this.tagName))
+		node += '>';
+	else
+		node += ' />';
+	return node;
+};
+
+
+// Virtual Factory : mimic document.createElement but return a virtual node
+Virtual.createElement = function(tagName) {
+	return new Virtual({
+		tagName: tagName
+	});
+};
+
+// Virtual Factory : mimic document.createTextNode but return a virtual node
+Virtual.createTextNode = function(value) {
+	return new Virtual({
+		tagName: 'textnode',
+		nodeValue: value
+	});
+};
+
+module.exports = Virtual;
+
+},{"./emitter":6,"./parsers/open-tags":11,"./pure-node":13,"./utils":15}]},{},[2])(2)
 });

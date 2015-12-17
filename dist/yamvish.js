@@ -240,6 +240,7 @@ y.Filter = require('./lib/filter');
 var interpolable = require('./lib/interpolable');
 y.interpolable = interpolable.interpolable;
 y.Interpolable = interpolable.Interpolable;
+y.Virtual = require('./lib/virtual');
 
 
 y.addToApi = function(api, name, args, method) {
@@ -258,13 +259,12 @@ module.exports = y;
 
  */
 
-},{"./lib/container":5,"./lib/context":6,"./lib/env":8,"./lib/filter":9,"./lib/interpolable":10,"./lib/pure-node":17,"./lib/template":18,"./lib/utils":19}],3:[function(require,module,exports){
+},{"./lib/container":5,"./lib/context":6,"./lib/env":8,"./lib/filter":9,"./lib/interpolable":10,"./lib/pure-node":17,"./lib/template":18,"./lib/utils":19,"./lib/virtual":21}],3:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var y = require('./core');
 
 
-y.Virtual = require('./lib/virtual');
 y.View = require('./lib/view');
 
 // parsers
@@ -275,7 +275,7 @@ y.listenerParser = require('./lib/parsers/listener-call');
 
 module.exports = y;
 
-},{"./core":2,"./lib/parsers/dom-to-template":11,"./lib/parsers/html-string-to-template":12,"./lib/parsers/listener-call":13,"./lib/view":20,"./lib/virtual":21,"elenpi":1}],4:[function(require,module,exports){
+},{"./core":2,"./lib/parsers/dom-to-template":11,"./lib/parsers/html-string-to-template":12,"./lib/parsers/listener-call":13,"./lib/view":20,"elenpi":1}],4:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 var Emitter = require('./emitter'),
 	utils = require('./utils');
@@ -629,16 +629,18 @@ Context.prototype = {
 				return this.parent.del(path.slice(1));
 			throw new Error('yamvish.Context : there is no parent in current context. could not find : ' + path.join('.'));
 		}
-		var key = path.pop(),
-			parent = path.length ? utils.getProp(this.data, path) : this.data;
+		var path2 = path.slice();
+		var key = path2.pop(),
+			parent = path2.length ? utils.getProp(this.data, path2) : this.data;
 		if (parent)
 			if (parent.forEach) {
 				var index = parseInt(key, 10);
-				parent.splice(index, 1);
-				this.notify('removeAt', path, null, index);
+
+				this.notify('removeAt', path2, parent.splice(index, 1), index);
 			} else {
+				var val = parent[key];
 				delete parent[key];
-				this.notify('delete', path, null, key);
+				this.notify('delete', path, val, key);
 			}
 		return this;
 	},
@@ -2256,14 +2258,16 @@ module.exports = PureNode;
 				}
 			);
 		},
-		use: function(name, opt) {
+		use: function(name) {
+			var args = Array.prototype.slice.call(arguments);
+			args.shift();
 			if (typeof name === 'string')
 				name = name.split(':');
-			var method = (name.forEach ? utils.getApiMethod(name) : name);
+			var method = (name.forEach ? utils.getApiMethod(env(), name) : name);
 			if (method.__yTemplate__)
 				this._queue = this._queue.concat(method._queue);
 			else
-				method.call(this, opt);
+				method.apply(this, args);
 			return this;
 		},
 		client: function(templ) {
@@ -2669,13 +2673,12 @@ module.exports = {
 			throw produceError('no template for .each template handler', parent);
 		return templ;
 	},
-	getApiMethod: function(path) {
+	getApiMethod: function(env, path) {
 		if (!path.forEach)
 			path = path.split(':');
 		if (path.length !== 2)
 			throw new Error('yamvish method call badly formatted : ' + path.join(':'));
-		var envi = env(),
-			output = envi.api[splitted[0]][splitted[1]];
+		var output = env.api[path[0]][path[1]];
 		if (!output)
 			throw new Error('no template/container found with "' + path.join(':') + '"');
 		return output;

@@ -8,9 +8,12 @@
   },
   "scripts": {
     "test": "mocha",
-    "build": "npm run build-core && npm run build-yamvish && gulp uglify",
-    "build-yamvish": "browserify -s y index.js > dist/yamvish.js",
-    "build-core": "browserify -s y core.js > dist/yamvish.core.js"
+    "build": "npm run build:core && npm run build:full && gulp uglify",
+    "build:full": "browserify -s y index.js > dist/yamvish.js",
+    "build:core": "browserify -s y core.js > dist/yamvish.core.js",
+    "bump:patch": "npm run build && mversion patch -m && npm publish",
+    "bump:minor": "npm run build && mversion minor -m && npm publish",
+    "bump:major": "npm run build && mversion major -m && npm publish"
   },
   "repository": {
     "type": "git",
