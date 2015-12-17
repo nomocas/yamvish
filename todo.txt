@@ -1,3 +1,46 @@
+	
+
+
+
+main context
+	each
+	with
+	context
+	route
+
+
+
+
+main router
+	route
+
+
+
+sub template : 
+	if
+	with
+	each
+	tag + derivated
+	use
+	client
+	server
+	find
+	contentSwitch
+	html
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	TODO : 
 		parsing 
 			from DOM
