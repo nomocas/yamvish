@@ -3,6 +3,8 @@
 var y = require('./core');
 
 
+y.View = require('./lib/view');
+
 // parsers
 y.elenpi = require('elenpi');
 y.dom = require('./lib/parsers/dom-to-template');
