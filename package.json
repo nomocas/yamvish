@@ -11,9 +11,9 @@
     "build": "npm run build:core && npm run build:full && gulp uglify",
     "build:full": "browserify -s y index.js > dist/yamvish.js",
     "build:core": "browserify -s y core.js > dist/yamvish.core.js",
-    "bump:patch": "npm run build && mversion patch -m && npm publish",
-    "bump:minor": "npm run build && mversion minor -m && npm publish",
-    "bump:major": "npm run build && mversion major -m && npm publish"
+    "bump:patch": "npm run build && git add -A && git commit -m 'patch version' && git push && mversion patch -m && git push --tags && npm publish",
+    "bump:minor": "npm run build && git add -A && git commit -m 'patch version' && git push && mversion minor -m && git push --tags && npm publish",
+    "bump:major": "npm run build && git add -A && git commit -m 'patch version' && git push && mversion major -m && git push --tags && npm publish"
   },
   "repository": {
     "type": "git",
