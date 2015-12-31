@@ -8,9 +8,6 @@ if (typeof require !== 'undefined')
 
 var expect = chai.expect;
 
-
-
-
 describe("context", function() {
 	describe("set", function() {
 		var context = new y.Context();
@@ -21,10 +18,8 @@ describe("context", function() {
 	});
 	describe("get", function() {
 		var context = new y.Context({
-			data: {
-				test: {
-					bar: true
-				}
+			test: {
+				bar: true
 			}
 		});
 		var res = context.get('test.bar');
@@ -34,9 +29,7 @@ describe("context", function() {
 	});
 	describe("push", function() {
 		var context = new y.Context({
-			data: {
-				myCollec: []
-			}
+			myCollec: []
 		});
 		context.push('myCollec', 'floupi');
 		it("should", function() {
@@ -47,9 +40,7 @@ describe("context", function() {
 		var res;
 		before(function(done) {
 			var context = new y.Context({
-				data: {
-					myCollec: []
-				}
+				myCollec: []
 			});
 			context.subscribe('myCollec', function(type, path, value, index) {
 				res = type + "-" + path + "-" + value + "-" + index;
@@ -65,9 +56,7 @@ describe("context", function() {
 		var res;
 		before(function(done) {
 			var context = new y.Context({
-				data: {
-					test: true
-				}
+				test: true
 			});
 			context.subscribe('test', function(type, path, value, index) {
 				res = type + "-" + path + "-" + value + "-" + index;
@@ -83,9 +72,7 @@ describe("context", function() {
 		var res, context;
 		before(function(done) {
 			context = new y.Context({
-				data: {
-					myCollec: ['foo', 'bar']
-				}
+				myCollec: ['foo', 'bar']
 			});
 			context.subscribe('myCollec', function(type, path, value, index) {
 				res = type + "-" + path + "-" + value + "-" + index;
@@ -102,9 +89,7 @@ describe("context", function() {
 		var res, context;
 		before(function(done) {
 			context = new y.Context({
-				data: {
-					test: false
-				}
+				test: false
 			});
 			context.subscribe('test', function(type, path, value, index) {
 				res = type + "-" + path + "-" + value + "-" + index;
@@ -121,9 +106,7 @@ describe("context", function() {
 		var res, context;
 		before(function(done) {
 			context = new y.Context({
-				data: {
-					myCollec: []
-				}
+				myCollec: []
 			});
 			context.subscribe('myCollec', function(type, path, value, index) {
 				res = type + "-" + path + "-" + value + "-" + index;
@@ -140,9 +123,7 @@ describe("context", function() {
 		var res, context;
 		before(function(done) {
 			context = new y.Context({
-				data: {
-					myCollec: ['bar', 'fleu']
-				}
+				myCollec: ['bar', 'fleu']
 			});
 			context.subscribe('myCollec', function(type, path, value, index) {
 				res = type + "-" + path + "-" + value + "-" + index;
@@ -157,11 +138,9 @@ describe("context", function() {
 	});
 	describe("dependent 1", function() {
 		var context = new y.Context({
-				data: {
-					foo: 'bar-',
-					zoo: 'flup-',
-					title: 'reu'
-				}
+				foo: 'bar-',
+				zoo: 'flup-',
+				title: 'reu'
 			})
 			.dependent('test', ['foo', 'title'], function(foo, title) {
 				return this.get('zoo') + foo + title;
@@ -180,11 +159,9 @@ describe("context", function() {
 		var res2;
 		before(function(done) {
 			var context = new y.Context({
-					data: {
-						foo: 'bar-',
-						zoo: 'flup-',
-						title: 'reu'
-					}
+					foo: 'bar-',
+					zoo: 'flup-',
+					title: 'reu'
 				})
 				.dependent('test', ['foo', 'title'], function(foo, title) {
 					return this.get('zoo') + foo + title;
@@ -207,9 +184,7 @@ describe("context", function() {
 
 	describe("interpolable filter", function() {
 		var context = new y.Context({
-			data: {
-				foo: 'yamvish'
-			}
+			foo: 'yamvish'
 		});
 		var inter = y.interpolable('{{ foo | upper() }} world');
 
@@ -225,30 +200,19 @@ describe("context", function() {
 
 
 	describe("full expression", function() {
-		var res;
-		before(function(done) {
-			var parent = new y.Context({
-				data: {
-					foo: '-bar'
-				}
-			});
-
-			var ctx = new y.Context({
-					parent: parent
-				})
-				.set('title', 'aaa@vbb.com')
-				.set('reu', 'feeee')
-				.set('deca', function(arg) {
-					return '-hello-' + arg;
-				})
-				.set('title', 'roooo')
-				.set('reu', 'lollipop');
-
-			ctx.done(function(s) {
-				res = y.interpolable('{{ title + deca(reu) + $parent.foo }}').output(ctx);
-				done();
-			});
+		var parent = new y.Context({
+			foo: '-bar'
 		});
+
+		var ctx = new y.Context({
+			title: 'roooo',
+			reu: 'lollipop',
+			deca: function(arg) {
+				return '-hello-' + arg;
+			}
+		}, parent);
+
+		var res = y.interpolable('{{ title + deca(reu) + $parent.foo }}').output(ctx);
 
 		it("should", function() {
 			expect(res).to.equals("roooo-hello-lollipop-bar");
@@ -299,6 +263,39 @@ describe("api", function() {
 		var res = templ.toHTMLString();
 		it("should", function() {
 			expect(res).to.equals("hello bloupi");
+		});
+	});
+});
+
+describe("custom tags", function() {
+	describe("add custom tag and use it", function() {
+		y.addCustomTag('floup', 'firstTag', {
+				anAttr: "custom tags !!"
+			},
+			y().div('hello {{ opts.anAttr }}').p('{{ opts.title }}')
+		);
+		var templ = y().use('floup:firstTag', {
+			title: 'foo !!'
+		});
+		var res = templ.toHTMLString();
+		it("should", function() {
+			expect(res).to.equals("<div>hello custom tags !!</div><p>foo !!</p>");
+		});
+	});
+	describe("custom tag with yield", function() {
+		y.addCustomTag('floup', 'firstTag', {
+				anAttr: "custom tags !!"
+			},
+			y().div('hello {{ opts.anAttr }}')
+			.__yield()
+			.p('{{ opts.title }}')
+		);
+		var templ = y().use('floup:firstTag', {
+			title: 'foo !!'
+		}, y().span('bar'));
+		var res = templ.toHTMLString();
+		it("should", function() {
+			expect(res).to.equals("<div>hello custom tags !!</div><span>bar</span><p>foo !!</p>");
 		});
 	});
 });

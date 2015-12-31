@@ -15,12 +15,10 @@ var interpolable = require('./lib/interpolable');
 y.interpolable = interpolable.interpolable;
 y.Interpolable = interpolable.Interpolable;
 y.Virtual = require('./lib/virtual');
+y.addCustomTag = require('./lib/custom-tags');
 
-
-y.addToApi = function(api, name, args, method) {
-
-};
-
+require('./lib/output-engine/dom');
+require('./lib/output-engine/string');
 
 
 module.exports = y;

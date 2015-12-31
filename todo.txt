@@ -1,20 +1,12 @@
 	
-
-
-
 main context
 	each
 	with
 	context
 	route
 
-
-
-
 main router
 	route
-
-
 
 sub template : 
 	if
@@ -30,10 +22,131 @@ sub template :
 
 
 
+each(var, templ, emptyTempl)
+
+tag(name, ?attributeMap, templ1, t2, ... )				OK	
+
+.addCustomTag(name, defautAttrMap, templ)				OK
+
+
+
+<uikit:flickity data-args="true, 12, '{{ hello }}'" /> 
 
 
 
 
+
+
+
+
+isomorphisme : 
+
+server : 
+
+on doit 
+- initialiser un jeu de context à chaque requete : 
+		Solution :
+		- soit mettre creation context principale dans fonction qui retourne nouveau context
+		- soit permettre de cloner un jeu de context
+
+	- lancer tous les call asynchrone et delay
+- attendre la fin des async
+- retrouver quel noeud avait quel context
+- utiliser template toHTMLString ( jeu de context )
+
+
+Structure Flow : 
+	==> garder pure node dans parent si il y a if/each comme enfant
+
+
+
+
+Context structure setters : 
+	with, each, context
+
+Node structure forker : 
+	if, route(map), contentSwitch, 
+
+
+
+si on parcours le template qu'on :
+- execute tout ce qui est structurel et contextuel
+- stock nouveaux contexts eventuels dans array tmp (fonction push/pop pour avoir arbre)
+- stock toute fonction de rendu dans tmp
+
+
+
+==> peut être déjà : réassocier route et context
+==> quand on fait 
+	==> ne se fait que sur le context ==> pas d'action sur le node courrant
+
+
+
+
+
+var home = y()
+.newContext(
+	c()
+	.set('searchTerm', '')
+	.load('i18n', 'i18n::my-view-{{ $env.language }}.json')
+	.load('campaigns', 'campaign::?match={{ searchTerm }}')
+	.routeMatch('/?home/?q:query', function(matched){
+		this.set('searchTerm', matched.query)
+			.set('page', 'home')
+			.setAsync('myCollec', c3po.get('foo::bar'));	
+	})
+	.each('myCollec', c().load('foo', ...))
+)
+.header(..., y().nav())
+.section(
+	y().each('myCollec', y().article(...))
+)
+.section(
+	y().routeContent({
+		'/home': y().use('api:home')
+		'/bloupi':y().nav(...)
+	})
+)
+.footer(...)
+
+
+
+
+y().routedContent({
+		
+})
+
+y().routedContent( {
+	'/foo': y().use('...'),
+	'/bar/s:flush': y().use('...')
+})
+
+
+y().contentSwitch('$route.page', {
+	'{{ $route.bloupi === 'flup' }}':y().use('...'),
+	'{{ $route.bloupi === 'flup' }}':y().use('...')
+})
+
+
+
+with/each/context :
+
+
+
+return this.exec(
+	function(){
+		// to element
+	}, 
+	// toHTMLString
+	function(){
+		// should find previous created context if any
+	}, 
+	// toContext
+	function(){
+		// should produce context and traverse
+
+	}
+)
 
 
 
