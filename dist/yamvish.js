@@ -1523,12 +1523,12 @@ function execQueue(callee, queue, context) {
 		nextIndex = 0,
 		f;
 	while (handler) {
-		// if (handler.engineBlock)
-		// 	f = handler.engineBlock.dom;
-		// else
-		f = handler.func || engine[handler.name];
+		if (handler.engineBlock)
+			f = handler.engineBlock.dom;
+		else
+			f = handler.func || engine[handler.name];
 		// if (!f)
-		// 	throw new Error('dom output : no template output method found with ' + JSON.stringify(handler));
+		// throw new Error('dom output : no template output method found with ' + JSON.stringify(handler));
 		f.call(callee, callee.context || context, handler.args);
 		handler = queue[++nextIndex];
 	}
@@ -1689,12 +1689,12 @@ Template.prototype.toHTMLString = function(context, descriptor) {
 		nextIndex = 0,
 		f;
 	while (handler) {
-		// if (handler.engineBlock)
-		// 	f = handler.engineBlock.string;
-		// else
-		f = handler.func || methods[handler.name];
-		// if (!f)
-		// 	throw new Error('string output : no template output method found with ' + JSON.stringify(handler));
+		if (handler.engineBlock)
+			f = handler.engineBlock.string;
+		else
+			f = handler.func || methods[handler.name];
+		if (!f)
+			throw new Error('string output : no template output method found with ' + JSON.stringify(handler));
 		f(descriptor.context || context, descriptor, handler.args);
 		handler = this._queue[++nextIndex];
 	}
@@ -1882,8 +1882,8 @@ function secondPass(template, context, descriptor) {
 		if (handler.func) {
 			if (handler.firstPass)
 				continue;
-			// else if (handler.engineBlock)
-			// 	f = handler.engineBlock.twopass.second || handler.engineBlock.string;
+			else if (handler.engineBlock)
+				f = handler.engineBlock.twopass.second || handler.engineBlock.string;
 			else
 				f = handler.func;
 		} else if (secondMethods[handler.name])
@@ -1906,12 +1906,11 @@ function firstPass(template, context) {
 		if (handler.func) {
 			if (!handler.firstPass)
 				continue;
-			// else if (handler.engineBlock) {
-			// 	f = handler.engineBlock.twopass.first;
-			// 	if (!f)
-			// 		continue;
-			// } 
-			else
+			else if (handler.engineBlock) {
+				f = handler.engineBlock.twopass.first;
+				if (!f)
+					continue;
+			} else
 				f = handler.func;
 		} else if (!firstMethods[handler.name])
 			continue;
@@ -2446,7 +2445,7 @@ Template.prototype = {
 		var type = typeof name;
 		this._queue.push({
 			func: (type === 'function') ? name : null,
-			// engineBlock: (type === 'object') ? name : null,
+			engineBlock: (type === 'object') ? name : null,
 			name: (type === 'string') ? name : null,
 			args: args,
 			firstPass: firstPass
@@ -2953,6 +2952,7 @@ var utils = require('./utils'),
 //____________________________________________________ VIEW
 var View = function View(opt) {
 	this.__yView__ = true;
+	opt = opt || {};
 	if (opt.componentName)
 		addComponent(opt.componentName, this);
 	Context.call(this, opt);

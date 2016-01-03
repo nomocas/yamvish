@@ -1502,12 +1502,12 @@ function execQueue(callee, queue, context) {
 		nextIndex = 0,
 		f;
 	while (handler) {
-		// if (handler.engineBlock)
-		// 	f = handler.engineBlock.dom;
-		// else
-		f = handler.func || engine[handler.name];
+		if (handler.engineBlock)
+			f = handler.engineBlock.dom;
+		else
+			f = handler.func || engine[handler.name];
 		// if (!f)
-		// 	throw new Error('dom output : no template output method found with ' + JSON.stringify(handler));
+		// throw new Error('dom output : no template output method found with ' + JSON.stringify(handler));
 		f.call(callee, callee.context || context, handler.args);
 		handler = queue[++nextIndex];
 	}
@@ -1668,12 +1668,12 @@ Template.prototype.toHTMLString = function(context, descriptor) {
 		nextIndex = 0,
 		f;
 	while (handler) {
-		// if (handler.engineBlock)
-		// 	f = handler.engineBlock.string;
-		// else
-		f = handler.func || methods[handler.name];
-		// if (!f)
-		// 	throw new Error('string output : no template output method found with ' + JSON.stringify(handler));
+		if (handler.engineBlock)
+			f = handler.engineBlock.string;
+		else
+			f = handler.func || methods[handler.name];
+		if (!f)
+			throw new Error('string output : no template output method found with ' + JSON.stringify(handler));
 		f(descriptor.context || context, descriptor, handler.args);
 		handler = this._queue[++nextIndex];
 	}
@@ -1893,7 +1893,7 @@ Template.prototype = {
 		var type = typeof name;
 		this._queue.push({
 			func: (type === 'function') ? name : null,
-			// engineBlock: (type === 'object') ? name : null,
+			engineBlock: (type === 'object') ? name : null,
 			name: (type === 'string') ? name : null,
 			args: args,
 			firstPass: firstPass
