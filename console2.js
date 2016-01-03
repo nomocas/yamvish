@@ -1,8 +1,4 @@
-var Template = require('./lib/template');
-var Context = require('./lib/context');
-require('./lib/output-engine/string');
-require('./lib/output-engine/twopass');
-require('./lib/output-engine/dom');
+var y = require('yamvish');
 var env = require('./lib/env'),
 	Virtual = require('./lib/virtual');
 
@@ -15,18 +11,12 @@ function range(size) {
 	return output;
 }
 
-y = function() {
-	return new Template();
-};
-
-y.Context = Context;
-
 //_____________________________________ STRING
 
 var t = y()
 	.set('world', 'yamvish')
 	.set('title', 'wuuu')
-	.set('items', range(150))
+	.set('items', range(200))
 	.div('hello {{ world }}')
 	.div('title {{ title }}')
 	.p('____')
@@ -35,6 +25,7 @@ var t = y()
 			'items',
 			y().p('{{ $this }}')
 			.section('biupi')
+			.header('{{ $this }}')
 			.header('{{ $this }}')
 			.footer('biupi')
 		)
@@ -46,24 +37,61 @@ var t = y()
 		.text('{{ title }}')
 	);
 
-for (var j = 0; j < 500; ++j)
+for (var j = 0; j < 200; ++j)
 // t.p('fgfgfg');
 	t.p('{{ world }}');
 
 
-function string() {
+
+test = {}
+
+test.string = function() {
 	var time = new Date().getTime();
 
 	for (var i = 0; i < 1000; ++i)
 	// console.log(
-		t.toHTMLString(new Context())
-		// );
+		t.toHTMLString()
+
 	time = new Date().getTime() - time;
 	console.log('string time : ', time);
-}
+
+};
+
+test.string2 = function() {
+
+	var time = new Date().getTime();
+	var promises = [];
+
+	for (var i = 0; i < 1000; ++i)
+		promises.push(
+			// console.log(
+			t.toHTMLString()
+		);
+
+	Promise.all(promises)
+		.then(function(res) {
+			time = new Date().getTime() - time;
+			console.log('string time : ', time);
+			// string();
+		}).catch(function(e) {
+			console.error(e);
+			console.log(e.stack);
+		});
+};
 //____________________________ TWO PASS
 
-function twopass() {
+
+test.twopass = function() {
+	var time = new Date().getTime();
+	for (var i = 0; i < 1000; ++i) {
+		// console.log(
+		t.twopass()
+	}
+	time = new Date().getTime() - time;
+	console.log('twopass time : ', time);
+};
+
+test.twopass2 = function() {
 	var promises = [];
 	var time = new Date().getTime();
 	for (var i = 0; i < 1000; ++i) {
@@ -75,111 +103,53 @@ function twopass() {
 	Promise.all(promises)
 		.then(function(res) {
 			time = new Date().getTime() - time;
-			console.log('twopass time : ', time);
+			console.log('twopass2 time : ', time);
 			// string();
 		}).catch(function(e) {
 			console.error(e);
 			console.log(e.stack);
 		});
-}
+};
 //____________________________________________________________________________________ DOM
 
 
 
-function dom() {
+test.dom = function() {
 	var time = new Date().getTime();
 
 	for (var i = 0; i < 1000; ++i)
 	// console.log(
-		t.toContainer(new Context()) //.toString()
-		// )
+		t.toContainer(); //.toString()
+	// )
 
 	time = new Date().getTime() - time;
 	console.log('dom time : ', time);
 }
 
-function dom2() {
-	var time = new Date().getTime(),
-		ctx, container;
-
-	var promises = [];
-	for (var i = 0; i < 1000; ++i) {
-		// console.log(
-		ctx = new Context();
-		t.toContainer(ctx) //.toString();
-
-		// promises.push(ctx.done());
-		// )
-	}
-
-	// return Promise.all(promises).then(function() {
-	// 	container.toString();
-	time = new Date().getTime() - time;
-	console.log('dom2 time : ', time);
-	// });
-}
 
 
-
-
-function contextDone() {
+test.dom2 = function() {
 	var time = new Date().getTime();
 
-
-	var promises = [];
 	for (var i = 0; i < 1000; ++i)
 	// console.log(
-		promises.push(new Context().set('bloupi', false).done());
-	// )
-
-	Promise.all(promises).then(function() {
-		time = new Date().getTime() - time;
-		console.log('contextDone time : ', time);
-	})
-
-}
-
-
-
-
-
-function contextDone2() {
-	var time = new Date().getTime();
-	var promises = [];
-	for (var i = 0; i < 1000; ++i) {
-		// console.log(
-		var p = new Context()
-			.set('bloupi', false)
-			.done()
-			.then(function(s) {
-				return true;
-			});
-		promises.push(p);
+		t.toContainer().toString()
 		// )
-	}
-	Promise.all(promises).then(function() {
-		time = new Date().getTime() - time;
-		console.log('contextDone time : ', time);
-	});
+
+	time = new Date().getTime() - time;
+	console.log('dom2 time : ', time);
 }
+
 
 
 
 
 // string();
-
-
-
-
-dom();
-// twopass();
-
-// twopass();
-
-
-// dom();
-
-// contextDone2();
+// string2();
+test.twopass2();
+// twopass2();
+// /test.dom2();
+// test.dom();
 
 
 
