@@ -11,6 +11,7 @@ y.Template = require('./lib/template');
 y.PureNode = require('./lib/pure-node');
 y.Container = require('./lib/container');
 y.Filter = require('./lib/filter');
+y.AsyncManager = require('./lib/async');
 var interpolable = require('./lib/interpolable');
 y.interpolable = interpolable.interpolable;
 y.Interpolable = interpolable.Interpolable;
