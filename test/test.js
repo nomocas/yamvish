@@ -166,11 +166,12 @@ describe("context", function() {
 				.dependent('test', ['foo', 'title'], function(foo, title) {
 					return this.get('zoo') + foo + title;
 				})
-				.set('title', 'flappy');
+				.set('title', 'flappy')
+				.set('foo', 'rully-');
 
 			var interpolable = y.interpolable('{{ test }}');
 
-			context.done(function() {
+			context.stabilised().then(function() {
 				res2 = interpolable.output(context);
 				done();
 			});
@@ -178,7 +179,7 @@ describe("context", function() {
 
 
 		it("should", function() {
-			expect(res2).to.equals("flup-bar-flappy");
+			expect(res2).to.equals("flup-rully-flappy");
 		});
 	});
 
@@ -242,7 +243,7 @@ describe("context", function() {
 
 describe("api", function() {
 	describe("add api", function() {
-		y.env().api.floup = {
+		y.env.api.floup = {
 			hello: function(arg) {
 				return this.text('hello ' + arg);
 			}
@@ -254,7 +255,7 @@ describe("api", function() {
 		});
 	});
 	describe("use(api:method)", function() {
-		y.env().api.floup = {
+		y.env.api.floup = {
 			hello: function(arg) {
 				return this.text('hello ' + arg);
 			}
@@ -266,6 +267,7 @@ describe("api", function() {
 		});
 	});
 });
+
 
 describe("custom tags", function() {
 	describe("add custom tag and use it", function() {
