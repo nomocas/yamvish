@@ -1,19 +1,19 @@
 
 
 <flag:bloupi some="true" >
-	<script>
+	<templ>
 		this.load('bar', 'json::bloupi');
-	</script>
+	</templ>
 	<div>
-		<script>
+		<templ>
 			this
 			.set('opts.some', false)
 			.cl('active', '{{ page === opts.title }}')
-			.cl('aClass', '{{ opts.path | exist() }}') // dereference opts.pat to get associated var in context
+			.cl('aClass', '{{ opts.path | exist() }}')
 			.click(function(e){
 
 			});
-		</script>
+		</templ>
 		<h1>{{ opts.title }}</h1>
 		<span><yield/></span>
 		<style type="text/sass" scoped>
@@ -33,7 +33,7 @@
 				return this
 				.set('opts.some', false)
 				.cl('active', '{{ page === opts.title }}')
-				.cl('aClass', '{{ opts.path | exist() }}') // dereference opts.pat to get associated var in context
+				.cl('aClass', '{{ opts.path | exist() }}')
 				.click(function(e){
 
 				});
@@ -48,12 +48,18 @@
 
 <flag:bloupi title="My Title" path="foo"> hello world </flag:bloupi>
 
-<script>
-	y().use('flag:bloupi', { title:'My Title', path:'foo' }, y().text('hello world'));
-</script>
+<this>
+	this.use(
+		'flag:bloupi', 
+		{ title:'My Title', path:'foo' }, 
+		y().text('hello world')
+	);
+</this>
 
 
-<uikit:flockity items="{{ schloupi.foo }}" autoPlay="5000" />
+<uikit:flickity items={{ schloupi.foo }} autoPlay=5000>
+	
+</uikit:flickity>
 
 <script>
 	y.addToApi('uikit','flickity', function(opts){

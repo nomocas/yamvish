@@ -1,133 +1,210 @@
-	
-main context
-	each
-	with
-	context
-	route
-
-main router
-	route
-
-sub template : 
-	if
-	with
-	each
-	tag + derivated
-	use
-	client
-	server
-	find
-	contentSwitch
-	html
 
 
-
-each(var, templ, emptyTempl)
+each(var, templ, emptyTempl, rql ?)
 
 tag(name, ?attributeMap, templ1, t2, ... )				OK	
 
 .addCustomTag(name, defautAttrMap, templ)				OK
 
+simple interpolation with { ... }
+
+Filter syntax : keep filters ? 
+
+context.set({
+	hello:function(){},
+	myVar: true
+})
 
 
-<uikit:flickity data-args="true, 12, '{{ hello }}'" /> 
+_binds ? remettre binds : passer par arguments on subscribe
+work on subscribe handler arguments list (remove path ? put value first)
 
+add $env in context or $root
+==> maybe associate env to context at construction 			OK
+==> add $env in context
 
-
-
-
-
-
-
-
-
-
-
-
-hasEach ? used anymore ?
-
-yamvish_containers ?
-
-
-_binds ?
-
-
-rendered/if ? : if(condition, childTemplateTrue, childTemplateFalse)
-
-
-
-add $env in context
-
-each/if parent PureNode management
-	Structure Flow : 
-		==> garder pure node dans parent si il y a if/each comme enfant
+add sync flag in context for string output
 
 
 
 
-var home = y()
-.newContext(
-	c()
-	.set('searchTerm', '')
-	.load('i18n', 'i18n::my-view-{{ $env.language }}.json')
-	.load('campaigns', 'campaign::?match={{ searchTerm }}')
-	.routeMatch('/?home/?q:query', function(matched){
-		this.set('searchTerm', matched.query)
-			.set('page', 'home')
-			.setAsync('myCollec', c3po.get('foo::bar'));	
-	})
-	.each('myCollec', c().load('foo', ...))
+NOW : 
+
+	routedsl
+
+	binds
+
+	$env in context
+
+
+
+	==> interpolable : appel a fonction ==> faire attention à pas choper la fonction 
+
+
+
+
+
+
+
+
+
+var context = new y.Context({
+ $route:'/wii/hello/hooo'
+})
+.listenTo('bloupi', function(context, msg){
+  console.log('main context receive bloupi : ', msg);
+});
+
+
+var v = y.view({
+  myAction:function(e){
+      this.set('test', true);
+  }
+})
+.set('reu', 'wiiiii')
+.route('hello', function(matched){
+  this.say('bloupi', 'weeeeeeee agora vox');
+  //console.log('view1 matched : ', matched);
+})
+//_______________________________
+.text('loli {{ reu }}')
+.br().br().br()
+.text('route : {{ $route }}')
+.div(
+  y.view()
+  .route('hooo', function(matched){
+    //console.log('view2 matched : ', matched);
+  })
+  .p('route2 : {{ $route }}')
 )
+.button('do test', y().click('myAction'))
+.suspendUntil('{{ test }}')
+.div('after suspension')
+
+HTML PARSING 
+
+
+<view app:home>
+	<this>
+		this.route('/home')
+			.set({
+				  myAction:function(e){
+				      this.set('test', true);
+				  },
+				reu:'wiiii'
+			})
+	</this>
+	loli {{ reu }}
+	<br/><br/><br/>
+	route : {{ $route }}
+	<div>
+		<view>
+			<this>
+				this.route('/home')
+			</this>
+			<p>route2 : {{ $route }}</p>
+			<button data-template="click('hello')">do test</button>
+			<this>this.suspendUntil('{{ test }}')</this>
+			<div>after suspession</div>
+		</view>
+	</div>
+</view>
+
+
+
+
+
+
+<if {{ foo.zoo }} >
+
+<else>
+
+</if>
+
+
+
+<each foo.zoo>
+
+<empty>
+
+</each>
+
+<with foo.zoo></with>
+<client></client>
+<server></server>
+
+<this>
+	this.exec(...)
+	.click(...);
+</this>
+
+
+
+
+<uikit:flickity />
+
+
+
+
+
+context.say('home:routed');								OK
+context.listen('home:routed', function(msg){ 			OK
+	this.push('items', msg)
+});
+
+
+context.deafTo ....     beans de handler
+
+.suspendUntil('{{ $route }}')							OK-dom
+
+
+Route : 
+	- pattern "tout-parser" (reg-exp, own route, ...)
+	- plugin own-route
+
+
+
+app.home = y.view({
+	name:'ced'
+})
+.route('./[$,home/$]', function(context, matched){
+	context.set('searchTerm', matched.query)
+		.set('page', 'home')
+		.setAsync('myCollec', c3po.get('foo::bar'))
+		.say('home:routed', { context:context, matched:matched });
+})
+.set('searchTerm', '')
+.load('i18n', 'i18n::my-view-{{ $env.language }}.json')
+.load('campaigns', 'campaign.search::{{ searchTerm }}')
+//__________________________________________________________
 .header(..., y().nav())
 .section(
 	y().each('myCollec', y().article(...))
+	.intput('text', '{{ searchTerm }}')
 )
 .section(
-	y().routeContent({
-		'/home': y().use('api:home')
-		'/bloupi':y().nav(...)
-	})
+	y().use('app:mini-profile')
+	.each('campaign', y().article(...))
+	.text('my name is {{ name }}')
+	.div('{{ i18n.title }}')
 )
 .footer(...)
+.set('name', 'gilles')
+
+
+app.contact = function(opts){
+	return this.use( 
+		y.view({ opts:opts }).set(...).p(...).__yield()
+	);
+};
 
 
 
 
-y().routedContent({
-		
-})
-
-y().routedContent( {
-	'/foo': y().use('...'),
-	'/bar/s:flush': y().use('...')
-})
 
 
-y().contentSwitch('$route.page', {
-	'{{ $route.bloupi === 'flup' }}':y().use('...'),
-	'{{ $route.bloupi === 'flup' }}':y().use('...')
-})
+//_____________________________________________
 
-
-
-with/each/context :
-
-
-
-return this.exec(
-	function(){
-		// to element
-	}, 
-	// toHTMLString
-	function(){
-		// should find previous created context if any
-	}, 
-	// toContext
-	function(){
-		// should produce context and traverse
-
-	}
-)
 
 
 

@@ -119,8 +119,8 @@ test.dom = function() {
 
 	for (var i = 0; i < 1000; ++i)
 	// console.log(
-		t.toContainer(); //.toString()
-	// )
+		t.toContainer(new y.Context())
+		// )
 
 	time = new Date().getTime() - time;
 	console.log('dom time : ', time);
@@ -133,7 +133,7 @@ test.dom2 = function() {
 
 	for (var i = 0; i < 1000; ++i)
 	// console.log(
-		t.toContainer().toString()
+		t.toContainer(new y.Context()).toString()
 		// )
 
 	time = new Date().getTime() - time;
@@ -146,10 +146,10 @@ test.dom2 = function() {
 
 // string();
 // string2();
-test.twopass2();
+// test.twopass2();
 // twopass2();
-// /test.dom2();
-// test.dom();
+test.dom2();
+// test.dom();	
 
 
 
