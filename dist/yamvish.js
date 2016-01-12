@@ -394,50 +394,46 @@ y.AsyncManager = require('./lib/async');
 var interpolable = require('./lib/interpolable');
 y.interpolable = interpolable.interpolable;
 y.Interpolable = interpolable.Interpolable;
-y.Virtual = require('./lib/virtual');
 y.addCustomTag = require('./lib/custom-tags');
+y.listenerParser = require('./lib/parsers/listener-call');
+y.elenpi = require('elenpi');
 
 require('./lib/output-engine/dom');
-require('./lib/output-engine/string');
 
+y.View = require('./lib/view');
+y.view = function(data, parent, path) {
+	return new y.View(data, parent, path);
+};
 
 module.exports = y;
 
 
 /*
-	Polyfills for IE8/9: 
+	Polyfills for IE9: 
 
 	es6-promise or promis
+	history API if router 
 
  */
 
-},{"./lib/async":5,"./lib/container":6,"./lib/context":7,"./lib/custom-tags":8,"./lib/env":10,"./lib/filter":11,"./lib/interpolable":12,"./lib/output-engine/dom":13,"./lib/output-engine/string":14,"./lib/pure-node":22,"./lib/template":24,"./lib/utils":25,"./lib/virtual":27}],4:[function(require,module,exports){
+},{"./lib/async":5,"./lib/container":6,"./lib/context":7,"./lib/custom-tags":8,"./lib/env":10,"./lib/filter":11,"./lib/interpolable":12,"./lib/output-engine/dom":13,"./lib/parsers/listener-call":17,"./lib/pure-node":21,"./lib/template":23,"./lib/utils":24,"./lib/view":25,"elenpi":1}],4:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var y = require('./core');
 
-
-y.View = require('./lib/view');
-
-y.view = function(data, parent, path) {
-	return new y.View(data, parent, path);
-};
 y.Virtual = require('./lib/virtual');
 y.router = require('./lib/router');
 
 // parsers
-y.elenpi = require('elenpi');
-y.dom = require('./lib/parsers/dom-to-template');
 y.html = require('./lib/parsers/html-string-to-template');
-y.listenerParser = require('./lib/parsers/listener-call');
 
-
+require('./lib/output-engine/string');
 require('./lib/output-engine/twopass');
 
 
 module.exports = y;
 
-},{"./core":3,"./lib/output-engine/twopass":15,"./lib/parsers/dom-to-template":16,"./lib/parsers/html-string-to-template":17,"./lib/parsers/listener-call":18,"./lib/router":23,"./lib/view":26,"./lib/virtual":27,"elenpi":1}],5:[function(require,module,exports){
+},{"./core":3,"./lib/output-engine/string":14,"./lib/output-engine/twopass":15,"./lib/parsers/html-string-to-template":16,"./lib/router":22,"./lib/virtual":26}],5:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 var Emitter = require('./emitter'),
 	utils = require('./utils');
@@ -522,7 +518,7 @@ utils.mergeProto(Emitter.prototype, AsyncManager.prototype);
 
 module.exports = AsyncManager;
 
-},{"./emitter":9,"./utils":25}],6:[function(require,module,exports){
+},{"./emitter":9,"./utils":24}],6:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -666,7 +662,7 @@ Container.prototype.insertBefore = function(child, ref) {
 
 module.exports = Container;
 
-},{"./emitter":9,"./pure-node":22,"./utils":25}],7:[function(require,module,exports){
+},{"./emitter":9,"./pure-node":21,"./utils":24}],7:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -717,7 +713,6 @@ Context.prototype = {
 	get: function(path) {
 		if (!path.forEach)
 			path = path.split('.');
-
 		switch (path[0]) {
 			case '$this':
 				if (path.length === 1)
@@ -1019,7 +1014,7 @@ function notifyUpstreams(space, type, path, value, index) {
 
 module.exports = Context;
 
-},{"./async":5,"./env":10,"./utils":25}],8:[function(require,module,exports){
+},{"./async":5,"./env":10,"./utils":24}],8:[function(require,module,exports){
 var Template = require('./template'),
 	Context = require('./context');
 /**
@@ -1076,8 +1071,7 @@ var customTagEngine = {
  * @param {[type]} templ          [description]
  */
 module.exports = function(apiName, tagName, defaultAttrMap, templ) {
-	var api = context.env
-.api,
+	var api = context.env.data.api,
 		space = api[apiName] = api[apiName] || {};
 	space[tagName] = function(attrMap, __yield) {
 		// copy default to attrMap
@@ -1090,7 +1084,7 @@ module.exports = function(apiName, tagName, defaultAttrMap, templ) {
 	return this;
 };
 
-},{"./context":7,"./template":24}],9:[function(require,module,exports){
+},{"./context":7,"./template":23}],9:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 /**
@@ -1164,7 +1158,7 @@ module.exports = env;
 },{"./emitter":9}],11:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
-function Filter(f) {
+/*function Filter(f) {
 	this._queue = f ? f._queue.slice() : [];
 };
 
@@ -1190,18 +1184,6 @@ Filter.prototype = {
 		});
 		return this;
 	},
-	reverse: function() {
-		this._queue.push(function(input) {
-			return input.reverse();
-		});
-		return this;
-	},
-	join: function(sep) {
-		this._queue.push(function(input) {
-			return input.join(sep);
-		});
-		return this;
-	},
 	json: function(pretty) {
 		this._queue.push(function(input) {
 			return JSON.stringify.apply(JSON, pretty ? [input, null, ' '] : [input]);
@@ -1218,7 +1200,7 @@ Filter.prototype = {
 };
 
 module.exports = Filter;
-
+*/
 /**
  * could be added :  (list from swigjs)
  
@@ -1892,7 +1874,7 @@ View.prototype.call = function(node, context) {
 
 module.exports = engine;
 
-},{"../container":6,"../context":7,"../pure-node":22,"../template":24,"../utils":25,"../view":26}],14:[function(require,module,exports){
+},{"../container":6,"../context":7,"../pure-node":21,"../template":23,"../utils":24,"../view":25}],14:[function(require,module,exports){
 var utils = require('../utils'),
 	openTags = require('../parsers/open-tags'),
 	strictTags = /span|script|meta/,
@@ -2072,7 +2054,7 @@ Template.prototype.toHTMLString = function(context, descriptor) {
 
 module.exports = methods;
 
-},{"../context":7,"../parsers/open-tags":19,"../template":24,"../utils":25,"../view":26}],15:[function(require,module,exports){
+},{"../context":7,"../parsers/open-tags":18,"../template":23,"../utils":24,"../view":25}],15:[function(require,module,exports){
 var utils = require('../utils'),
 	Template = require('../template'),
 	Context = require('../context'),
@@ -2336,71 +2318,7 @@ module.exports = {
 	secondPass: secondPass
 };
 
-},{"../context":7,"../template":24,"../utils":25,"../view":26,"./string":14}],16:[function(require,module,exports){
-/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-var Template = require('../template');
-
-// var expression = require('./string-to-template');
-//_______________________________________________________ DOM PARSING
-
-/**
- * DOM element.childNodes parsing to y.Template
- * @param  {[type]} element [description]
- * @param  {[type]} template   [description]
- * @return {[type]}         [description]
- */
-function elementChildrenToTemplate(element, template) {
-	var t = template || new Template();
-	for (var i = 0, len = element.childNodes.length; i < len; ++i)
-		elementToTemplate(element.childNodes[i], t);
-	return t;
-};
-
-/**
- * DOM element parsing to y.Template
- * @param  {[type]} element [description]
- * @param  {[type]} template   [description]
- * @return {[type]}         [description]
- */
-function elementToTemplate(element, template) {
-	var t = template || new Template();
-	switch (element.nodeType) {
-		case 1:
-			// if (element.tagName.toLowerCase() === 'script')
-			// console.log('CATCH script');
-			var childTemplate = new Template();
-			elementChildrenToTemplate(element, childTemplate);
-			if (element.id)
-				childTemplate.id(element.id)
-			if (element.attributes.length)
-				for (var j = 0, len = element.attributes.length; j < len; ++j) {
-					var o = element.attributes[j];
-					if (o.name === 'data-template')
-						console.log("catch data template")
-					childTemplate.attr(o.name, o.value);
-				}
-			for (var l = 0; l < element.classList; ++l)
-				childTemplate.setClass(element.classList[l]);
-			t.tag.apply(t, [element.tagName.toLowerCase(), childTemplate]);
-			break;
-		case 3:
-			t.text(element.textContent);
-			break;
-		case 4:
-			console.log('element is CDATA : ', element);
-			break;
-		default:
-			console.warn('y.elementToTemplate : DOM node not managed : type : %s, ', element.nodeType, element);
-	}
-	return t;
-};
-
-module.exports = {
-	elementChildrenToTemplate: elementChildrenToTemplate,
-	elementToTemplate: elementToTemplate
-};
-
-},{"../template":24}],17:[function(require,module,exports){
+},{"../context":7,"../template":23,"../utils":24,"../view":25,"./string":14}],16:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var elenpi = require('elenpi'),
@@ -2556,7 +2474,7 @@ parser.createDescriptor = function() {
 
 module.exports = parser;
 
-},{"../template":24,"./open-tags":19,"./string-to-template":21,"elenpi":1}],18:[function(require,module,exports){
+},{"../template":23,"./open-tags":18,"./string-to-template":20,"elenpi":1}],17:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var elenpi = require('elenpi'),
@@ -2621,10 +2539,10 @@ parser.parseListener = function(string) {
 
 module.exports = parser;
 
-},{"./primitive-argument-rules":20,"elenpi":1}],19:[function(require,module,exports){
+},{"./primitive-argument-rules":19,"elenpi":1}],18:[function(require,module,exports){
 module.exports = /(br|input|img|area|base|col|command|embed|hr|img|input|keygen|link|meta|param|source|track|wbr)/;
 
-},{}],20:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 var r = require('elenpi').r;
 
 var rules = {
@@ -2647,7 +2565,7 @@ var rules = {
 
 module.exports = rules;
 
-},{"elenpi":1}],21:[function(require,module,exports){
+},{"elenpi":1}],20:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var elenpi = require('elenpi'),
@@ -2726,7 +2644,7 @@ module.exports = parser;
 console.log(y.expression.parseTemplate("click ( '12', 14, true, p(2, 4, span( false).p())). div(12345)"));
  */
 
-},{"../template":24,"./primitive-argument-rules":20,"elenpi":1}],22:[function(require,module,exports){
+},{"../template":23,"./primitive-argument-rules":19,"elenpi":1}],21:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 /**
  * Pure Virtual Node
@@ -2781,7 +2699,7 @@ PureNode.prototype  = {
 
 module.exports = PureNode;
 
-},{}],23:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 var utils = require('./utils'),
 	View = require('./view'),
 	Template = require('./template'),
@@ -2813,13 +2731,13 @@ Template.prototype.clickTo = function(href, title, data) {
 			if (e.preventDefault())
 				e.preventDefault();
 			if (href !== (location.pathname + location.search)) {
+				this.env.data.agora.emit('route:update', href, title || '', data);
 				window.history.pushState({
 					href: href,
 					title: title,
 					data: data
 				}, title  || '', href);
 				document.title = title || '';
-				this.env.data.agora.emit('route:update', href, title || '', data);
 			}
 		})
 	);
@@ -2840,8 +2758,8 @@ var settings = {
 			// popstate event from back/forward in browser
 			window.addEventListener('popstate', function(e) {
 				var route = parseURL(location.pathname + (location.search || ''));
-				document.title = e.state ? (e.state.title || '') : '';
 				context.env.data.agora.emit('route:update', route);
+				document.title = e.state ? (e.state.title || '') : '';
 			});
 		}
 	}
@@ -2905,7 +2823,8 @@ View.prototype.route = function(route, handler) {
 			};
 			parentRouter = findParentRouter(context);
 			if (parentRouter) {
-				parentRouter.subscribe('$route', exec);
+				container.binds = container.binds ||  [];
+				parentRouter.subscribe('$route', exec, container.binds);
 				currentRoute = parentRouter.data.$route;
 			}
 			container.on('mounted', function() {
@@ -2933,7 +2852,7 @@ View.prototype.route = function(route, handler) {
 
 module.exports = settings;
 
-},{"./template":24,"./utils":25,"./view":26,"routedsl":2}],24:[function(require,module,exports){
+},{"./template":23,"./utils":24,"./view":25,"routedsl":2}],23:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 "use strict";
@@ -3299,7 +3218,7 @@ Template.render = 0;
 
 module.exports = Template;
 
-},{"./context":7,"./interpolable":12,"./parsers/listener-call":18,"./utils":25}],25:[function(require,module,exports){
+},{"./context":7,"./interpolable":12,"./parsers/listener-call":17,"./utils":24}],24:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 //__________________________________________________________ UTILS
 
@@ -3362,15 +3281,7 @@ function emptyNode(node) {
 		node.innerHTML = '';
 }
 
-function unmountPureNode(purenode) {
-	for (var i = 0, len = purenode.childNodes.length; i < len; ++i) {
-		var child = purenode.childNodes[i];
-		if (child.__yPureNode__)
-			unmountPureNode(child);
-		else if (child.parentNode !== purenode)
-			child.parentNode.removeChild(child);
-	}
-}
+
 
 function destroyElement(node, removeFromParent) {
 	if (removeFromParent && node.parentNode) {
@@ -3451,9 +3362,15 @@ function findNextSibling(node) {
 	return tmp.nextSibling || null;
 }
 
-
-
-
+function unmountPureNode(purenode) {
+	for (var i = 0, len = purenode.childNodes.length; i < len; ++i) {
+		var child = purenode.childNodes[i];
+		if (child.__yPureNode__)
+			unmountPureNode(child);
+		else if (child.parentNode !== purenode)
+			child.parentNode.removeChild(child);
+	}
+}
 
 //__________________________________________ Classes
 
@@ -3566,13 +3483,14 @@ var utils = module.exports = {
 	}
 };
 
+
 utils.removeChild = function(parent, node) {
 	if (node.__yPureNode__ && !node.__yVirtual__) {
 		if (node.childNodes)
 			for (var i = 0, len = node.childNodes.length; i < len; ++i)
 				utils.removeChild(parent, node.childNodes[i]);
-	} else
-		parent.removeChild(node);
+	} else if (node.parentNode)
+		node.parentNode.removeChild(node);
 };
 utils.insertBefore = function(parent, node, ref) {
 	if (node.__yPureNode__ && !node.__yVirtual__) {
@@ -3583,7 +3501,7 @@ utils.insertBefore = function(parent, node, ref) {
 		parent.insertBefore(node, ref);
 };
 
-},{}],26:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 var Template = require('./template');
 
 function View(data, parent, path) {
@@ -3608,7 +3526,7 @@ View.prototype = new Template();
 
 module.exports = View;
 
-},{"./template":24}],27:[function(require,module,exports){
+},{"./template":23}],26:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -3694,5 +3612,5 @@ Virtual.createTextNode = function(value) {
 
 module.exports = Virtual;
 
-},{"./emitter":9,"./parsers/open-tags":19,"./pure-node":22,"./utils":25}]},{},[4])(4)
+},{"./emitter":9,"./parsers/open-tags":18,"./pure-node":21,"./utils":24}]},{},[4])(4)
 });

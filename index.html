@@ -195,8 +195,8 @@
 
 
     test.router = function() {
-        y.env.language = 'fr';
         var rootContext = new y.Context()
+            .set('$env.language', 'fr')
             .onAgora('bloupi', function(context, msg) {
                 console.log('rootContext receive bloupi : ', msg);
             });
@@ -228,7 +228,7 @@
             .button('/hoo/hisss/huue', y().clickTo('/hoo/hisss/huue', 'hohihu'))
             .button('/hoo/huue', y().clickTo('/hoo/huue', 'hohu'))
             .route('/hoo', function(matched) {
-                console.log('view1 matched : ', matched);
+                // console.log('view1 matched : ', matched);
                 // this.toAgora('bloupi', 'view1 route matched : ', matched);
             })
             //_______________________________
@@ -236,20 +236,20 @@
             .text('loli - {{ reu }} - {{ testOutput(12) }} - {{ obj.test2(33) }}')
             .p('lolooooo - {{ $env.language }}')
             .br().br().br()
-            .text('route : {{ $route.route | join(".") }}')
+            .text('route : {{ $route.route.join("|") }}')
             .div(
                 y.view()
                 .route('./hisss', function(matched) {
-                    console.log('view2 matched : ', matched);
+                    // console.log('view2 matched : ', matched);
                 })
-                .p('route2 : {{ $route.route  | join(".")  }}')
+                .p('route2 : {{ $route.route.join("|")  }}')
             )
             .div(
                 y.view()
                 .route('./huue', function(matched) {
-                    console.log('view3 matched : ', matched);
+                    // console.log('view3 matched : ', matched);
                 })
-                .p('route3 : {{ $route.route  | join(".")  }}')
+                .p('route3 : {{ $route.route.join("|")  }}')
                 .use(t)
             )
             .button('do test', y().click('myAction'))
