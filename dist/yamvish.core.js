@@ -344,7 +344,7 @@ AsyncManager.prototype = {
 	}
 };
 
-utils.mergeProto(Emitter.prototype, AsyncManager.prototype);
+utils.shallowMerge(Emitter.prototype, AsyncManager.prototype);
 
 module.exports = AsyncManager;
 
@@ -371,10 +371,9 @@ Container.prototype  = {
 	 * mount container in selector
 	 * @param  {[type]} selector [description]
 	 * @param  {[type]} mode     could be : null, appendTo, insertBefore
-	 * @param  {[type]} querier  [description]
 	 * @return {[type]}          [description]
 	 */
-	mount: function(selector, mode, querier) {
+	mount: function(selector, mode) {
 		if (this.destroyed)
 			throw new Error('yamvish container has been destroyed. could not mount anymore.');
 		if (selector && (selector === this.mountPoint || selector === this.mountSelector))
@@ -382,7 +381,7 @@ Container.prototype  = {
 		var node = selector;
 		if (typeof node === 'string') {
 			this.mountSelector = selector;
-			node = (querier || utils.domQuery)(selector);
+			node = utils.domQuery(selector);
 		}
 		if (!node)
 			throw new Error('yamvish : mount point not found : ' + selector);
@@ -404,11 +403,11 @@ Container.prototype  = {
 
 		return this.emit('mounted', this);
 	},
-	mountBefore: function(nextSiblingSelector, querier) {
-		return this.mount(nextSiblingSelector, 'insertBefore', querier);
+	mountBefore: function(nextSiblingSelector) {
+		return this.mount(nextSiblingSelector, 'insertBefore');
 	},
-	appendTo: function(selector, querier) {
-		return this.mount(selector, 'append', querier);
+	appendTo: function(selector) {
+		return this.mount(selector, 'append');
 	},
 	unmount: function() {
 		if (!this.mountPoint)
@@ -419,11 +418,22 @@ Container.prototype  = {
 		this.mountSelector = null;
 		return this.emit('unmounted', this);
 	},
+	destroyer: function() {
+		var self = this;
+		return function() {
+			self.destroy();
+		};
+	},
 	destroy: function() {
 		// console.log('Container destroy :', this);
 		if (this.destroyed)
-			return this;
+			throw new Error('yamvish container has been destroyed. could not mount anymore.');
 		this.emit('destroy', this);
+		if (this.binds) {
+			for (var i = 0, len = this.binds.length; i < len; i++)
+				this.binds[i]();
+			this.binds = null;
+		}
 		this.destroyed = true;
 		if (this.childNodes)
 			for (var i = 0; i < this.childNodes.length; i++)
@@ -432,11 +442,6 @@ Container.prototype  = {
 		this.context = null;
 		this.mountPoint = null;
 		this.mountSelector = null;
-		if (this._route) {
-			if (this._route.unbind)
-				this._route.unbind();
-			this._route = null;
-		}
 	},
 	hide: function() {
 		if (this.destroyed)
@@ -457,8 +462,8 @@ Container.prototype  = {
 	}
 };
 
-utils.mergeProto(PureNode.prototype, Container.prototype);
-utils.mergeProto(Emitter.prototype, Container.prototype);
+utils.shallowMerge(PureNode.prototype, Container.prototype);
+utils.shallowMerge(Emitter.prototype, Container.prototype);
 
 Container.prototype.appendChild = function(child, nextSibling) {
 	PureNode.prototype.appendChild.call(this, child);
@@ -526,7 +531,6 @@ function unsub(context, path, fn, upstream) {
 			context.unsubscribe(path, fn, upstream);
 	};
 }
-
 
 Context.prototype = {
 	destroy: function() {
@@ -814,19 +818,17 @@ Context.prototype = {
 		});
 		return this;
 	},
-	offAgora: function(messageName, handler) {
-		this.env.data.agora.off(messageName, handler);
-		return this;
-	},
-	toAgora: function(name, message) {
-		this.env.data.agora.emit(name, this, message);
+	toAgora: function(name) {
+		var args = [name].concat([].slice.call(arguments, 1))
+		this.env.data.agora.emit.apply(this.env.data.agora, args);
 		return this;
 	}
 };
 
 Context.env = new Context(env);
+delete Context.env.env;
 
-utils.mergeProto(AsyncManager.prototype, Context.prototype);
+utils.shallowMerge(AsyncManager.prototype, Context.prototype);
 
 function notifyUpstreams(space, type, path, value, index) {
 	for (var i = 0, len = space._upstreams.length; i < len; ++i) {
@@ -1063,8 +1065,6 @@ function tryExpr(func, context) {
 		return func.call(context.data, context, context.env.data.expressionsGlobal);
 	} catch (e) {
 		console.error(e);
-		if (context.env.data.debug)
-			console.error(e.stack);
 		return '';
 	}
 }
@@ -1230,10 +1230,9 @@ var Interpolable = function(splitted, strict) {
 	}
 };
 
-function unsub(context, instance) {
+function unsub(instance) {
 	return function() {
-		if (!context.destroyed)
-			instance.destroy();
+		instance.destroy();
 	};
 }
 
@@ -1496,7 +1495,7 @@ var engine = {
 			failContainer,
 			current,
 			ok;
-
+		node.binds = node.binds || [];
 		var exec = function(type, path, ok) {
 			var nextSibling = null; // for browser compliance we need to force null  https://bugzilla.mozilla.org/show_bug.cgi?id=119489
 			if (current) {
@@ -1506,11 +1505,19 @@ var engine = {
 				else
 					node.removeChild(current);
 			}
-			if (ok)
-				current = successContainer = successContainer || successTempl.toContainer(node.context || context);
-			else if (failTempl)
-				current = failContainer = failContainer || failTempl.toContainer(node.context || context);
-			else
+			if (ok) {
+				current = successContainer;
+				if (!current) {
+					current = successContainer = successTempl.toContainer(node.context || context);
+					node.binds.push(current.destroyer());
+				}
+			} else if (failTempl) {
+				current = failContainer;
+				if (!current) {
+					current = failContainer = failTempl.toContainer(node.context || context);
+					node.binds.push(current.destroyer());
+				};
+			} else
 				current = fakeNode;
 
 			if (!current.__yContainer__)
@@ -1542,6 +1549,7 @@ var engine = {
 		utils.hide(fakeNode);
 		node.appendChild(fakeNode);
 		current = fakeNode;
+		node.binds = node.binds || []; //.push(container.destroyer());
 
 		var setEmpty = function(nextSibling) {
 			if (current === container)
@@ -1549,7 +1557,11 @@ var engine = {
 			if (emptyTempl) {
 				if (current === emptyContainer)
 					return;
-				current = emptyContainer = emptyContainer || emptyTempl.toContainer(node.context ||  context);
+				current = emptyContainer;
+				if (!current) {
+					current = emptyContainer = emptyTempl.toContainer(node.context ||  context);
+					node.binds.push(current.destroyer());
+				}
 				if (nextSibling)
 					emptyContainer.mountBefore(nextSibling);
 				else
@@ -1571,6 +1583,7 @@ var engine = {
 
 		var update = function(type, path, value, index) {
 			switch (type) {
+
 				case 'reset':
 				case 'set':
 					if (!node.__yPureNode__ || node.mountPoint)
@@ -1600,12 +1613,14 @@ var engine = {
 					if (!node.__yPureNode__ || node.mountPoint)
 						utils.show(node.mountPoint || node);
 					break;
+
 				case 'removeAt':
 					var nextSibling = utils.findNextSibling(current);
 					utils.destroyElement(container.childNodes[index], true);
 					if (!container.childNodes.length)
 						setEmpty(nextSibling);
 					break;
+
 				case 'push':
 					var nextSibling = utils.findNextSibling(current),
 						child = eachPush(value, node.context || context, container, template);
@@ -1617,7 +1632,6 @@ var engine = {
 		};
 		var data = path;
 		if (typeof path === 'string') {
-			node.binds = node.binds || [];
 			context.subscribe(path, update, false, node.binds);
 			context.subscribe(path + '.*', function(type, path, value, key) {
 				var node = container.childNodes[key];
@@ -1636,6 +1650,7 @@ var engine = {
 			dico = utils.shallowCopy(args[1]);
 		if (!dico['default'])
 			dico['default'] = utils.hide(context.env.data.factory.createElement('div'));
+		node.binds = node.binds || [];
 		var valueUpdate = function(type, path, value) {
 			var templ = dico[String(value)],
 				nextSibling = utils.findNextSibling(current);
@@ -1650,8 +1665,10 @@ var engine = {
 					node.removeChild(current);
 			}
 			current = templ;
-			if (current.__yTemplate__)
+			if (current.__yTemplate__) {
 				current = dico[value] = templ.toContainer(context).mountBefore(nextSibling);
+				node.binds.push(current.destroyer());
+			}
 			if (!current.__yContainer__)
 				node.insertBefore(current, nextSibling);
 			else if (nextSibling)
@@ -1659,12 +1676,30 @@ var engine = {
 			else
 				current.appendTo(node);
 		};
-		node.binds = node.binds || [];
 		xpr.subscribeTo(context, valueUpdate, node.binds);
 		valueUpdate('set', null, xpr.output(context));
 	},
 	mountHere: function(context, node, args) {
-		args[0].toContainer(context).mount(node);
+		(node.binds = node.binds || []).push(args[0].toContainer(context).mount(node).destroyer());
+	},
+	suspendUntil: function(context, node, args) {
+		var xpr = args[0],
+			index = args[1],
+			templ = args[2],
+			val = xpr.__interpolable__ ? xpr.output(context) : xpr,
+			rest = new Template(templ._queue.slice(index)),
+			instance;
+		var exec = function(type, path, value) {
+			if (value) {
+				if (instance)
+					instance.destroy();
+				rest.call(node, context);
+			}
+		};
+		if (val)
+			exec('set', null, val);
+		else if (xpr.__interpolable__)
+			instance = xpr.subscribeTo(context, exec);
 	}
 };
 
@@ -1678,10 +1713,8 @@ function _execQueue(node, queue, context) {
 		else
 			f = handler.func || engine[handler.name];
 		f(node.context || context, node, handler.args);
-		if (handler.engineBlock && handler.engineBlock.suspendAfter) {
-			// console.log('suspended');
+		if (handler.suspendAfter)
 			break;
-		}
 		handler = queue[++nextIndex];
 	}
 }
@@ -1700,7 +1733,6 @@ Template.prototype.toContainer = View.prototype.toContainer = function(context) 
 View.prototype.call = function(node, context) {
 	this.toContainer(context).mount(node);
 };
-
 
 module.exports = engine;
 
@@ -1849,15 +1881,12 @@ module.exports = PureNode;
 
 },{}],15:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-
 "use strict";
 
 var utils = require('./utils'),
 	interpolable = require('./interpolable').interpolable,
 	Context = require('./context'),
 	listenerParser = require('./parsers/listener-call');
-
-//_______________________________________________________ TEMPLATE
 
 function Template(t) {
 	this.__yTemplate__ = true;
@@ -1870,7 +1899,6 @@ function Template(t) {
 		this._queue = [];
 }
 
-// local shortcut
 function y() {
 	return new Template();
 }
@@ -1913,14 +1941,15 @@ function parseAttrMap(attrMap) {
 };
 utils.parseAttrMap = parseAttrMap;
 Template.prototype = {
-	exec: function(name, args, firstPass) {
+	exec: function(name, args, firstPass, suspendAfter) {
 		var type = typeof name;
 		this._queue.push({
 			func: (type === 'function') ? name : null,
 			engineBlock: (type === 'object') ? name : null,
 			name: (type === 'string') ? name : null,
 			args: args,
-			firstPass: firstPass
+			firstPass: firstPass,
+			suspendAfter: suspendAfter
 		});
 		return this;
 	},
@@ -2055,7 +2084,6 @@ Template.prototype = {
 			else
 				t.use(arguments[i]);
 		}
-		// console.log('tag : ', hasAttrMap, t);
 		return this.exec('tag', [name, t]);
 	},
 	br: function() {
@@ -2158,29 +2186,8 @@ Template.prototype = {
 		}
 		return this;
 	},
-	suspendUntil: function(xpr, handler) {
-		var xpr = interpolable(xpr),
-			index = this._queue.length + 1,
-			self = this;
-		return this.exec({
-			suspendAfter: true,
-			dom: function(context, container) {
-				var val = xpr.__interpolable__ ? xpr.output(context) : xpr,
-					rest, instance;
-				var exec = function(type, path, value) {
-					if (value) {
-						instance.destroy();
-						rest.call(container, context);
-					}
-				};
-				if (val)
-					exec('set', null, val);
-				else if (xpr.__interpolable__) {
-					rest = new Template(self._queue.slice(index));
-					instance = xpr.subscribeTo(context, exec);
-				}
-			}
-		});
+	suspendUntil: function(xpr) {
+		return this.exec('suspendUntil', [interpolable(xpr), this._queue.length + 1, this], false, true);
 	}
 };
 
@@ -2209,8 +2216,6 @@ Template.prototype.cl = Template.prototype.setClass;
 	};
 });
 
-Template.render = 0;
-
 module.exports = Template;
 
 },{"./context":5,"./interpolable":10,"./parsers/listener-call":12,"./utils":16}],16:[function(require,module,exports){
@@ -2222,6 +2227,10 @@ function produceError(msg, report) {
 	e.report = report;
 	return e;
 }
+
+//_____________________________ MERGE PROTO
+
+
 
 //________________________________ Properties management with dot syntax
 
@@ -2276,9 +2285,10 @@ function emptyNode(node) {
 		node.innerHTML = '';
 }
 
-
-
 function destroyElement(node, removeFromParent) {
+	if (node.context)
+		node.context.destroy();
+
 	if (removeFromParent && node.parentNode) {
 		node.parentNode.removeChild(node);
 		node.parentNode = null;
@@ -2286,27 +2296,20 @@ function destroyElement(node, removeFromParent) {
 
 	if (node.__yPureNode__) {
 		if (node.__yVirtual__) {
-			node.attributes = undefined;
-			node.listeners = undefined;
-			node.classes = undefined;
-			node.style = undefined;
+			node.attributes = null;
+			node.listeners = null;
+			node.classes = null;
+			node.style = null;
 		}
 		if (node.childNodes && node.childNodes.length)
 			destroyChildren(node, removeFromParent);
 	} else if (node.childNodes && node.childNodes.length)
 		destroyChildren(node);
 
-	if (node._binds) {
-		for (var i = 0, len = node._binds.length; i < len; i++)
-			node._binds[i]();
-		node._binds = null;
-	}
-	if (node.context)
-		node.context.destroy();
-	if (node._route) {
-		if (node._route.unbind)
-			node._route.unbind();
-		node._route = null;
+	if (node.binds) {
+		for (var i = 0, len = node.binds.length; i < len; i++)
+			node.binds[i]();
+		node.binds = null;
 	}
 }
 
@@ -2317,15 +2320,9 @@ function destroyChildren(node, removeFromParent) {
 		destroyElement(node.childNodes[i], removeFromParent);
 }
 
-//_____________________________ MERGE PROTO
 
-function mergeProto(src, target) {
-	for (var i in src)
-		target[i] = src[i];
-}
 
 // DOM/Virtual utils
-
 function mountChildren(node, parent, nextSibling) {
 	if (!node.childNodes || !node.__yPureNode__)
 		return;
@@ -2357,9 +2354,15 @@ function findNextSibling(node) {
 	return tmp.nextSibling || null;
 }
 
-
-
-
+function unmountPureNode(purenode) {
+	for (var i = 0, len = purenode.childNodes.length; i < len; ++i) {
+		var child = purenode.childNodes[i];
+		if (child.__yPureNode__)
+			unmountPureNode(child);
+		else if (child.parentNode !== purenode)
+			child.parentNode.removeChild(child);
+	}
+}
 
 //__________________________________________ Classes
 
@@ -2385,8 +2388,7 @@ function removeClass(node, name) {
 //_______________________________________ EXPORTS
 
 var utils = module.exports = {
-	mountChildren: mountChildren,
-	mergeProto: mergeProto,
+	produceError: produceError,
 	destroyElement: destroyElement,
 	destroyChildren: destroyChildren,
 	setProp: setProp,
@@ -2394,10 +2396,26 @@ var utils = module.exports = {
 	getProp: getProp,
 	emptyNode: emptyNode,
 	unmountPureNode: unmountPureNode,
-	produceError: produceError,
+	mountChildren: mountChildren,
 	setClass: setClass,
 	removeClass: removeClass,
 	findNextSibling: findNextSibling,
+	removeChild: function(parent, node) {
+		if (node.__yPureNode__ && !node.__yVirtual__) {
+			if (node.childNodes)
+				for (var i = 0, len = node.childNodes.length; i < len; ++i)
+					utils.removeChild(parent, node.childNodes[i]);
+		} else if (node.parentNode)
+			node.parentNode.removeChild(node);
+	},
+	insertBefore: function(parent, node, ref) {
+		if (node.__yPureNode__ && !node.__yVirtual__) {
+			if (node.childNodes)
+				for (var i = 0, len = node.childNodes.length; i < len; ++i)
+					utils.insertBefore(parent, node.childNodes[i], ref);
+		} else
+			parent.insertBefore(node, ref);
+	},
 	hide: function(node) {
 		if (node.__yContainer__)
 			return node.hide();
@@ -2414,25 +2432,21 @@ var utils = module.exports = {
 		node.style.display = '';
 		return node;
 	},
-	merge: function(background, foreground) {
-		var obj = {};
-		for (var i in background)
-			obj[i] = background[i];
-		for (var j in foreground)
-			obj[j] = foreground[j];
-		return obj;
-	},
 	domQuery: function(selector) {
 		if (selector[0] === '#')
 			return document.getElementById(selector.substring(1));
 		else
 			return document.querySelector(selector);
 	},
+	shallowMerge: function(src, target) {
+		for (var i in src)
+			target[i] = src[i];
+	},
 	shallowCopy: function(obj) {
 		if (obj && obj.forEach)
 			return obj.slice();
 		if (obj && typeof obj === 'object') {
-			if (obj instanceof RegExp)
+			if (obj instanceof RegExp || obj instanceof Date)
 				return obj;
 			var res = {};
 			for (var i in obj)
@@ -2456,47 +2470,7 @@ var utils = module.exports = {
 		if (!output)
 			throw new Error('no template/container found with "' + path.join(':') + '"');
 		return output;
-	},
-	/**
-	 * get arguments list from any function
-	 * @param  {Function} func the function to analyse
-	 * @return {Array}      the list of arguments
-	 */
-	getFunctionArgs: function(func) {
-		return (func + '').replace(/\s+/g, '')
-			.replace(/[\/][*][^\/*]*[*][\/]/g, '') // strip simple comments  
-			.split('){', 1)[0].replace(/^[^(]*[(]/, '') // extract the parameters  
-			.replace(/=[^,]+/g, '') // strip any ES6 defaults  
-			.split(',')
-			.filter(Boolean); // split & filter [""]  
 	}
-};
-
-function unmountPureNode(purenode) {
-	for (var i = 0, len = purenode.childNodes.length; i < len; ++i) {
-		var child = purenode.childNodes[i];
-		if (child.__yPureNode__)
-			unmountPureNode(child);
-		else if (child.parentNode !== purenode)
-			child.parentNode.removeChild(child);
-	}
-}
-
-utils.removeChild = function(parent, node) {
-	if (node.__yPureNode__ && !node.__yVirtual__) {
-		if (node.childNodes)
-			for (var i = 0, len = node.childNodes.length; i < len; ++i)
-				utils.removeChild(parent, node.childNodes[i]);
-	} else if (node.parentNode)
-		node.parentNode.removeChild(node);
-};
-utils.insertBefore = function(parent, node, ref) {
-	if (node.__yPureNode__ && !node.__yVirtual__) {
-		if (node.childNodes)
-			for (var i = 0, len = node.childNodes.length; i < len; ++i)
-				utils.insertBefore(parent, node.childNodes[i], ref);
-	} else
-		parent.insertBefore(node, ref);
 };
 
 },{}],17:[function(require,module,exports){
