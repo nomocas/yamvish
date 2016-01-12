@@ -1,6 +1,18 @@
+Filter syntax : keep filters ? 		NO : todo : remove filters and find solution for placing them in globals
+
+work on subscribe handler arguments list (remove path ? put value first)     		
+
+add sync flag in context for string output
+
+context.deafTo ....     beans de handler
 
 
-each(var, templ, emptyTempl, rql ?)
+
+
+
+
+
+each(var, templ, emptyTempl) 							OK
 
 tag(name, ?attributeMap, templ1, t2, ... )				OK	
 
@@ -8,40 +20,28 @@ tag(name, ?attributeMap, templ1, t2, ... )				OK
 
 simple interpolation with { ... }
 
-Filter syntax : keep filters ? 
-
-context.set({
-	hello:function(){},
-	myVar: true
-})
 
 
-_binds ? remettre binds : passer par arguments on subscribe
-work on subscribe handler arguments list (remove path ? put value first)
 
-add $env in context or $root
+_binds ? remettre binds : passer par arguments on subscribe							OK
+
+add $env in context											OK
 ==> maybe associate env to context at construction 			OK
-==> add $env in context
+==> add $env in context										OK
 
-add sync flag in context for string output
 
 
 
 
 NOW : 
 
-	routedsl
+	routedsl 					OK
 
-	binds
+	binds 						OK
 
-	$env in context
+	$env in context 			OK
 
-
-
-	==> interpolable : appel a fonction ==> faire attention à pas choper la fonction 
-
-
-
+	==> interpolable : appel a fonction ==> faire attention à pas choper la fonction  OK
 
 
 
@@ -153,7 +153,6 @@ context.listen('home:routed', function(msg){ 			OK
 });
 
 
-context.deafTo ....     beans de handler
 
 .suspendUntil('{{ $route }}')							OK-dom
 
@@ -265,26 +264,6 @@ app.contact = function(opts){
 
 		for each template handler : 
 		add args in queue (through done) and place inner functions outside : no more closure
-
-	Eacher : 
-		==> maybe introduce special token/tag/comment for each/filter/sort 
-			=> it resolves the html/js template equivalence
-		e.g. 
-
-			<div ...>
-				<h1>...</h1>
-				<each:users filter="name" sort="lastname">
-						
-
-				</each>
-				...
-				<each:events>
-					
-
-				</each>
-				...
-				<todo-list:todoId  />
-			</div>
 
 
 
