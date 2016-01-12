@@ -687,7 +687,7 @@ function Context(data, parent, path, env) {
 			var self = this;
 			this.path = path;
 			this.binds = [];
-			this.parent.subscribe(path, function(type, path, value) {
+			this.parent.subscribe(path, function(value) {
 				self.reset(value);
 			}, false, this.binds)
 		}
@@ -745,7 +745,7 @@ Context.prototype = {
 			argsOutput.push(self.get(dependency));
 			// subscribe to arguments[i]
 			var index = count++; // localise var in scope for local func closure below
-			self.subscribe(dependency, function(type, p, value, key) {
+			self.subscribe(dependency, function(value, type, p, key) {
 				argsOutput[index] = value;
 				if (!willFire)
 					willFire = self.delay(function() {
@@ -920,7 +920,7 @@ Context.prototype = {
 					len = space._listeners.length;
 					continue;
 				}
-				var r = listener.call(this, type, path, value, index);
+				var r = listener.call(this, value, type, path, index);
 				if (r && r.then)
 					this.waiting(r);
 			}
@@ -1008,7 +1008,7 @@ function notifyUpstreams(space, type, path, value, index) {
 			len = space._upstreams.length;
 			continue;
 		}
-		var r = upstream.call(this, type, path, value, index);
+		var r = upstream.call(this, value, type, path, index);
 		if (r && r.then)
 			this.waiting(r);
 	}
@@ -1160,7 +1160,7 @@ module.exports = env;
 },{"./emitter":9}],11:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
-/*function Filter(f) {
+function Filter(f) {
 	this._queue = f ? f._queue.slice() : [];
 };
 
@@ -1202,7 +1202,7 @@ Filter.prototype = {
 };
 
 module.exports = Filter;
-*/
+
 /**
  * could be added :  (list from swigjs)
  
@@ -1300,18 +1300,18 @@ function compileExpression(expr, filter, dependencies) {
 
 // produce context's subscibtion event handler
 function handler(instance, context, func, index, callback) {
-	return function(type, path, newValue) {
+	return function() {
 		var old = instance.results[index];
 		instance.results[index] = tryExpr(func, context);
 		if (old === instance.results[index])
 			return;
 		if (instance.dependenciesCount === 1)
-			callback(type, path, instance.output(context));
+			callback(instance.output(context), 'set');
 		else if (!instance.willFire)
 			instance.willFire = context.delay(function() { // allow small time to manage other dependencies update without multiple rerender
 				if (instance.willFire) {
 					instance.willFire = null;
-					callback(type, path, instance.output(context));
+					callback(instance.output(context), 'set');
 				}
 			}, 0);
 	};
@@ -1507,8 +1507,8 @@ var engine = {
 		if (value.__interpolable__) {
 			node = context.env.data.factory.createTextNode(value.output(context));
 			node.binds = node.binds || [];
-			value.subscribeTo(context, function(type, path, newValue) {
-				node.nodeValue = newValue;
+			value.subscribeTo(context, function(value, type, path) {
+				node.nodeValue = value;
 			}, node.binds);
 		} else
 			node = context.env.data.factory.createTextNode(value);
@@ -1524,8 +1524,8 @@ var engine = {
 			val = args[1];
 		if (value.__interpolable__) {
 			val = value.output(context);
-			var attributeUpdate = function(type, path, newValue) {
-				node.setAttribute(name, newValue);
+			var attributeUpdate = function(value, type, path) {
+				node.setAttribute(name, value);
 			};
 			node.binds = node.binds || [];
 			value.subscribeTo(context, attributeUpdate, node.binds);
@@ -1534,8 +1534,8 @@ var engine = {
 	},
 	disabled: function(context, node, args) {
 		var xpr = args[0];
-		var disable = function(type, path, newValue) {
-			if (newValue)
+		var disable = function(value, type, path) {
+			if (value)
 				node.setAttribute('disabled');
 			else
 				node.removeAttribute('disabled');
@@ -1543,9 +1543,9 @@ var engine = {
 		if (xpr.__interpolable__) {
 			node.binds = node.binds || [];
 			xpr.subscribeTo(context, disable, node.binds);
-			disable('set', null, xpr.output(context));
+			disable(xpr.output(context), 'set');
 		} else
-			disable('set', null, (value !== undefined) ? value : true);
+			disable((value !== undefined) ? value : true, 'set');
 	},
 	val: function(context, node, args) {
 		var varPath = args[0],
@@ -1556,8 +1556,8 @@ var engine = {
 					context.set(varPath, event.target.value);
 				});
 			node.binds = node.binds || [];
-			value.subscribeTo(context, function(type, path, newValue) {
-				node.setAttribute('value', newValue);
+			value.subscribeTo(context, function(value, type, path) {
+				node.setAttribute('value', value);
 			}, node.binds);
 			node.setAttribute('value', value.output(context));
 		} else
@@ -1568,21 +1568,21 @@ var engine = {
 			flag = args[1],
 			classValue = name,
 			flagValue = flag;
-		var flagUpdate = function(type, path, newValue) {
-			flagValue = newValue;
-			if (newValue)
+		var flagUpdate = function(value, type, path) {
+			flagValue = value;
+			if (value)
 				utils.setClass(node, classValue);
 			else
 				utils.removeClass(node, classValue);
 		};
 
 		if (name.__interpolable__) {
-			var nameUpdate = function(type, path, newValue) {
+			var nameUpdate = function(value, type, path) {
 				if (flagValue) {
 					utils.removeClass(node, classValue);
-					utils.setClass(node, newValue);
+					utils.setClass(node, value);
 				}
-				classValue = newValue;
+				classValue = value;
 			};
 			node.binds = node.binds || [];
 			name.subscribeTo(context, nameUpdate, node.binds);
@@ -1591,9 +1591,9 @@ var engine = {
 		if (flag.__interpolable__) {
 			node.binds = node.binds || [];
 			flag.subscribeTo(context, flagUpdate, node.binds);
-			flagUpdate('set', null, flag.output(context));
+			flagUpdate(flag.output(context), 'set');
 		} else
-			flagUpdate('set', null, flag);
+			flagUpdate(flag, 'set');
 	},
 	css: function(context, node, args) {
 		var prop = args[0],
@@ -1602,8 +1602,8 @@ var engine = {
 		if (value.__interpolable__) {
 			val = value.output(context);
 			node.binds = node.binds || [];
-			value.subscribeTo(context, function(type, path, newValue) {
-				node.style[prop] = newValue;
+			value.subscribeTo(context, function(value, type, path) {
+				node.style[prop] = value;
 			}, node.binds);
 		}
 		if (!node.style)
@@ -1619,11 +1619,11 @@ var engine = {
 		if (flag.__interpolable__) {
 			val = flag.output(context);
 			node.binds = node.binds || [];
-			flag.subscribeTo(context, function(type, path, newValue) {
+			flag.subscribeTo(context, function(value, type, path) {
 				if (node.__yContainer__)
-					newValue ? node.show() : node.hide();
+					value ? node.show() : node.hide();
 				else
-					node.style.display = newValue ? initial : 'none';
+					node.style.display = value ? initial : 'none';
 			}, node.binds);
 		}
 		if (node.__yContainer__)
@@ -1666,7 +1666,7 @@ var engine = {
 			current,
 			ok;
 		node.binds = node.binds || [];
-		var exec = function(type, path, ok) {
+		var exec = function(ok, type, path) {
 			var nextSibling = null; // for browser compliance we need to force null  https://bugzilla.mozilla.org/show_bug.cgi?id=119489
 			if (current) {
 				nextSibling = utils.findNextSibling(current);
@@ -1703,7 +1703,7 @@ var engine = {
 			condition.subscribeTo(context, exec, node.binds);
 		} else if (typeof condition === 'function')
 			ok = condition.call(node, context);
-		exec('set', null, ok);
+		exec(ok, 'set');
 	},
 	//______________________________________________ EACH
 	each: function(context, node, args) {
@@ -1751,7 +1751,7 @@ var engine = {
 			}
 		};
 
-		var update = function(type, path, value, index) {
+		var update = function(value, type, path, index) {
 			switch (type) {
 
 				case 'reset':
@@ -1803,7 +1803,7 @@ var engine = {
 		var data = path;
 		if (typeof path === 'string') {
 			context.subscribe(path, update, false, node.binds);
-			context.subscribe(path + '.*', function(type, path, value, key) {
+			context.subscribe(path + '.*', function(value, type, path, key) {
 				var node = container.childNodes[key];
 				if (node)
 					return node.context.reset(value);
@@ -1811,7 +1811,7 @@ var engine = {
 			data = context.get(path);
 		}
 		if (data)
-			update('set', path, data);
+			update(data, 'set');
 	},
 	//________________________________________________ MISC
 	switch: function(context, node, args) {
@@ -1821,7 +1821,7 @@ var engine = {
 		if (!dico['default'])
 			dico['default'] = utils.hide(context.env.data.factory.createElement('div'));
 		node.binds = node.binds || [];
-		var valueUpdate = function(type, path, value) {
+		var valueUpdate = function(value, type, path) {
 			var templ = dico[String(value)],
 				nextSibling = utils.findNextSibling(current);
 			if (!templ) {
@@ -1847,7 +1847,7 @@ var engine = {
 				current.appendTo(node);
 		};
 		xpr.subscribeTo(context, valueUpdate, node.binds);
-		valueUpdate('set', null, xpr.output(context));
+		valueUpdate(xpr.output(context), 'set');
 	},
 	mountHere: function(context, node, args) {
 		(node.binds = node.binds || []).push(args[0].toContainer(context).mount(node).destroyer());
@@ -1859,17 +1859,13 @@ var engine = {
 			val = xpr.__interpolable__ ? xpr.output(context) : xpr,
 			rest = new Template(templ._queue.slice(index)),
 			instance;
-		var exec = function(type, path, value) {
-			if (value) {
-				if (instance)
-					instance.destroy();
-				rest.call(node, context);
-			}
-		};
 		if (val)
-			exec('set', null, val);
+			rest.call(node, context);
 		else if (xpr.__interpolable__)
-			instance = xpr.subscribeTo(context, exec);
+			instance = xpr.subscribeTo(context, function(value, type, path) {
+				if (value)
+					rest.call(node, context);
+			});
 	}
 };
 
@@ -2126,7 +2122,7 @@ var firstMethods = {
 		var ok, condition = args[0],
 			successTempl = args[1],
 			failTempl = args[2];
-		var exec = function(type, path, ok) {
+		var exec = function(ok, type, path) {
 			if (ok)
 				firstPass(successTempl, context);
 			else if (failTempl)
@@ -2137,7 +2133,7 @@ var firstMethods = {
 			condition.subscribeTo(context, exec);
 		} else if (typeof condition === 'function')
 			ok = condition.call(this, context);
-		exec('set', null, ok);
+		exec(ok, 'set');
 	},
 	//_________________________________________ EACH
 	each: function(context, args) {
@@ -2148,7 +2144,7 @@ var firstMethods = {
 			data = path,
 			contexts = [];
 
-		var updateArray = function(type, path, value, index) {
+		var updateArray = function(value, type, path, index) {
 			// on array update : produce or maintain associated local contexts array
 			var ctx, ctxs = contexts;
 			switch (type) {
@@ -2189,7 +2185,7 @@ var firstMethods = {
 
 		if (typeof path === 'string') {
 			context.subscribe(path, updateArray);
-			context.subscribe(path + '.*', function(type, path, value, key) {
+			context.subscribe(path + '.*', function(value, type, path, key) {
 				// on array's item update
 				var ctx = contexts[key];
 				if (ctx)
@@ -2198,7 +2194,7 @@ var firstMethods = {
 			data = context.get(path);
 		}
 		if (data)
-			updateArray('set', path, data);
+			updateArray(data, 'set');
 		// store local contexts array in parent
 		(context.children = context.children || []).push(contexts);
 	},
@@ -2824,7 +2820,7 @@ View.prototype.route = function(route, handler) {
 			current = fakeNode;
 			context.isRouted = true;
 
-			var exec = function(type, path, $route) {
+			var exec = function($route, type) {
 				if (!container.mountPoint || $route === oldRoute)
 					return;
 				oldRoute = $route;
@@ -2865,17 +2861,17 @@ View.prototype.route = function(route, handler) {
 			parentRouter = findParentRouter(context);
 			if (parentRouter) {
 				container.binds = container.binds ||  [];
-				parentRouter.subscribe('$route', exec, container.binds);
+				parentRouter.subscribe('$route', exec, false, container.binds);
 				currentRoute = parentRouter.data.$route;
 			}
 			container.on('mounted', function() {
 				var currentRoute = parentRouter ? parentRouter.data.$route : null;
 				if (currentRoute)
-					exec('set', null, currentRoute);
+					exec(currentRoute, 'set');
 			});
 
 			if (currentRoute)
-				exec('set', null, currentRoute);
+				exec(currentRoute, 'set');
 		},
 		string: function(context, descriptor, args) {
 
