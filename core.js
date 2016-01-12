@@ -15,19 +15,24 @@ y.AsyncManager = require('./lib/async');
 var interpolable = require('./lib/interpolable');
 y.interpolable = interpolable.interpolable;
 y.Interpolable = interpolable.Interpolable;
-y.Virtual = require('./lib/virtual');
 y.addCustomTag = require('./lib/custom-tags');
+y.listenerParser = require('./lib/parsers/listener-call');
+y.elenpi = require('elenpi');
 
 require('./lib/output-engine/dom');
-require('./lib/output-engine/string');
 
+y.View = require('./lib/view');
+y.view = function(data, parent, path) {
+	return new y.View(data, parent, path);
+};
 
 module.exports = y;
 
 
 /*
-	Polyfills for IE8/9: 
+	Polyfills for IE9: 
 
 	es6-promise or promis
+	history API if router 
 
  */
