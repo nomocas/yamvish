@@ -204,8 +204,8 @@
         y.router.bindHistory(rootContext);
 
         var mainView = y.view({
-                myAction: function(e) {
-                    console.log('my action');
+                myAction: function(e, hello, bar) {
+                    console.log('my action', hello, bar);
                     this.set('test', true);
                 },
                 myAction2: function(e) {
@@ -219,7 +219,8 @@
                     test2: function(arg) {
                         return 'test2:' + arg + this.title;
                     }
-                }
+                },
+                bar: 'zoo'
             })
             .set('reu', 'wiiiii')
             .button('click to /', y().clickTo('/', 'root'))
@@ -252,7 +253,7 @@
                 .p('route3 : {{ $route.route }}')
                 .use(t)
             )
-            .button('do test', y().click('myAction'))
+            .button('do test', y().click('myAction(12, bar)'))
             .button('do test2', y().click('myAction2'))
             .suspendUntil('{{ test }}')
             .div('after suspension');
