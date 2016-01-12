@@ -1,26 +1,21 @@
 Filter syntax : keep filters ? 		NO : todo : remove filters and find solution for placing them in globals
 
-work on subscribe handler arguments list (remove path ? put value first)     		
+
+simple interpolation with { ... }
 
 add sync flag in context for string output
 
-context.deafTo ....     beans de handler
+
+.suspendUntil('{{ $route }}')							OK-dom-string : missing twopass
 
 
-
-
-
-
+work on subscribe handler arguments list (remove path ? put value first)     						OK	
 
 each(var, templ, emptyTempl) 							OK
 
 tag(name, ?attributeMap, templ1, t2, ... )				OK	
 
 .addCustomTag(name, defautAttrMap, templ)				OK
-
-simple interpolation with { ... }
-
-
 
 
 _binds ? remettre binds : passer par arguments on subscribe							OK
@@ -30,11 +25,6 @@ add $env in context											OK
 ==> add $env in context										OK
 
 
-
-
-
-NOW : 
-
 	routedsl 					OK
 
 	binds 						OK
@@ -43,43 +33,25 @@ NOW :
 
 	==> interpolable : appel a fonction ==> faire attention à pas choper la fonction  OK
 
+eventListeners : click(addUser(user)) : should retrieve user before feeding addUser			OK
 
 
 
-
-
-var context = new y.Context({
- $route:'/wii/hello/hooo'
-})
-.listenTo('bloupi', function(context, msg){
-  console.log('main context receive bloupi : ', msg);
+context.toAgora('home:routed');								OK
+context.onAgora('home:routed', function(msg){ 			OK
+	this.push('items', msg)
 });
 
 
-var v = y.view({
-  myAction:function(e){
-      this.set('test', true);
-  }
-})
-.set('reu', 'wiiiii')
-.route('hello', function(matched){
-  this.say('bloupi', 'weeeeeeee agora vox');
-  //console.log('view1 matched : ', matched);
-})
-//_______________________________
-.text('loli {{ reu }}')
-.br().br().br()
-.text('route : {{ $route }}')
-.div(
-  y.view()
-  .route('hooo', function(matched){
-    //console.log('view2 matched : ', matched);
-  })
-  .p('route2 : {{ $route }}')
-)
-.button('do test', y().click('myAction'))
-.suspendUntil('{{ test }}')
-.div('after suspension')
+
+
+
+TWOPASS : 
+
+
+		Template.prototype.toContext(?context) for firstPass
+
+
 
 HTML PARSING 
 
@@ -147,55 +119,7 @@ HTML PARSING
 
 
 
-context.say('home:routed');								OK
-context.listen('home:routed', function(msg){ 			OK
-	this.push('items', msg)
-});
 
-
-
-.suspendUntil('{{ $route }}')							OK-dom
-
-
-Route : 
-	- pattern "tout-parser" (reg-exp, own route, ...)
-	- plugin own-route
-
-
-
-app.home = y.view({
-	name:'ced'
-})
-.route('./[$,home/$]', function(context, matched){
-	context.set('searchTerm', matched.query)
-		.set('page', 'home')
-		.setAsync('myCollec', c3po.get('foo::bar'))
-		.say('home:routed', { context:context, matched:matched });
-})
-.set('searchTerm', '')
-.load('i18n', 'i18n::my-view-{{ $env.language }}.json')
-.load('campaigns', 'campaign.search::{{ searchTerm }}')
-//__________________________________________________________
-.header(..., y().nav())
-.section(
-	y().each('myCollec', y().article(...))
-	.intput('text', '{{ searchTerm }}')
-)
-.section(
-	y().use('app:mini-profile')
-	.each('campaign', y().article(...))
-	.text('my name is {{ name }}')
-	.div('{{ i18n.title }}')
-)
-.footer(...)
-.set('name', 'gilles')
-
-
-app.contact = function(opts){
-	return this.use( 
-		y.view({ opts:opts }).set(...).p(...).__yield()
-	);
-};
 
 
 
@@ -213,8 +137,6 @@ app.contact = function(opts){
 
 	TODO : 
 		parsing 
-			from DOM
-				still data-*
 			from String 				OK
 
 		 .disabled 						OK
@@ -243,16 +165,9 @@ app.contact = function(opts){
 		y.dependent('bloupi', 'foo', function(bloupi, foo){});				OK
 		
 
-		y.applyToDOM(node | selector, template)		==> apply template on dom element (select it if selector)
-
-		eventListeners : click(addUser(user)) : should retrieve user before feeding addUser
 
 
 
-
-		Template.prototype.toContext(?context)
-
-			==> produce context tree and apply all context's vars handling
 
 
 
