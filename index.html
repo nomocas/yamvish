@@ -197,7 +197,7 @@
     test.router = function() {
         var rootContext = new y.Context()
             .set('$env.language', 'fr')
-            .onAgora('bloupi', function(context, msg) {
+            .onAgora('bloupi', function(msg) {
                 console.log('rootContext receive bloupi : ', msg);
             });
 
@@ -236,20 +236,20 @@
             .text('loli - {{ reu }} - {{ testOutput(12) }} - {{ obj.test2(33) }}')
             .p('lolooooo - {{ $env.language }}')
             .br().br().br()
-            .text('route : {{ $route.route.join("|") }}')
+            .text('route : {{ $route.route }}')
             .div(
                 y.view()
                 .route('./hisss', function(matched) {
                     // console.log('view2 matched : ', matched);
                 })
-                .p('route2 : {{ $route.route.join("|")  }}')
+                .p('route2 : {{ $route.route }}')
             )
             .div(
                 y.view()
                 .route('./huue', function(matched) {
                     // console.log('view3 matched : ', matched);
                 })
-                .p('route3 : {{ $route.route.join("|")  }}')
+                .p('route3 : {{ $route.route }}')
                 .use(t)
             )
             .button('do test', y().click('myAction'))
