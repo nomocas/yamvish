@@ -42,7 +42,7 @@ describe("context", function() {
 			var context = new y.Context({
 				myCollec: []
 			});
-			context.subscribe('myCollec', function(type, path, value, index) {
+			context.subscribe('myCollec', function(value, type, path, index) {
 				res = type + "-" + path + "-" + value + "-" + index;
 				done();
 			});
@@ -58,7 +58,7 @@ describe("context", function() {
 			var context = new y.Context({
 				test: true
 			});
-			context.subscribe('test', function(type, path, value, index) {
+			context.subscribe('test', function(value, type, path, index) {
 				res = type + "-" + path + "-" + value + "-" + index;
 				done();
 			});
@@ -74,7 +74,7 @@ describe("context", function() {
 			context = new y.Context({
 				myCollec: ['foo', 'bar']
 			});
-			context.subscribe('myCollec', function(type, path, value, index) {
+			context.subscribe('myCollec', function(value, type, path, index) {
 				res = type + "-" + path + "-" + value + "-" + index;
 				done();
 			});
@@ -91,7 +91,7 @@ describe("context", function() {
 			context = new y.Context({
 				test: false
 			});
-			context.subscribe('test', function(type, path, value, index) {
+			context.subscribe('test', function(value, type, path, index) {
 				res = type + "-" + path + "-" + value + "-" + index;
 				done();
 			});
@@ -108,7 +108,7 @@ describe("context", function() {
 			context = new y.Context({
 				myCollec: []
 			});
-			context.subscribe('myCollec', function(type, path, value, index) {
+			context.subscribe('myCollec', function(value, type, path, index) {
 				res = type + "-" + path + "-" + value + "-" + index;
 				done();
 			});
@@ -125,7 +125,7 @@ describe("context", function() {
 			context = new y.Context({
 				myCollec: ['bar', 'fleu']
 			});
-			context.subscribe('myCollec', function(type, path, value, index) {
+			context.subscribe('myCollec', function(value, type, path, index) {
 				res = type + "-" + path + "-" + value + "-" + index;
 				done();
 			});
@@ -243,19 +243,19 @@ describe("context", function() {
 
 describe("api", function() {
 	describe("add api", function() {
-		y.env.api.floup = {
+		y.api.floup = {
 			hello: function(arg) {
 				return this.text('hello ' + arg);
 			}
 		};
-		var templ = y().api('floup').hello('world');
+		var templ = y().addApi('floup').hello('world');
 		var res = templ.toHTMLString();
 		it("should", function() {
 			expect(res).to.equals("hello world");
 		});
 	});
 	describe("use(api:method)", function() {
-		y.env.api.floup = {
+		y.api.floup = {
 			hello: function(arg) {
 				return this.text('hello ' + arg);
 			}
@@ -267,7 +267,6 @@ describe("api", function() {
 		});
 	});
 });
-
 
 describe("custom tags", function() {
 	describe("add custom tag and use it", function() {
