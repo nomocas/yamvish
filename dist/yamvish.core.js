@@ -244,7 +244,7 @@ y.Interpolable = interpolable.Interpolable;
 y.addCustomTag = require('./lib/custom-tags');
 y.listenerParser = require('./lib/parsers/listener-call');
 y.elenpi = require('elenpi');
-
+y.api = require('./lib/api');
 require('./lib/output-engine/dom');
 
 y.View = require('./lib/view');
@@ -263,7 +263,11 @@ module.exports = y;
 
  */
 
-},{"./lib/async":3,"./lib/container":4,"./lib/context":5,"./lib/custom-tags":6,"./lib/env":8,"./lib/filter":9,"./lib/interpolable":10,"./lib/output-engine/dom":11,"./lib/parsers/listener-call":12,"./lib/pure-node":14,"./lib/template":15,"./lib/utils":16,"./lib/view":17,"elenpi":1}],3:[function(require,module,exports){
+},{"./lib/api":3,"./lib/async":4,"./lib/container":5,"./lib/context":6,"./lib/custom-tags":7,"./lib/env":9,"./lib/filter":10,"./lib/interpolable":11,"./lib/output-engine/dom":12,"./lib/parsers/listener-call":13,"./lib/pure-node":15,"./lib/template":16,"./lib/utils":17,"./lib/view":18,"elenpi":1}],3:[function(require,module,exports){
+// simple global object where store apis
+module.exports = {};
+
+},{}],4:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 var Emitter = require('./emitter'),
 	utils = require('./utils');
@@ -348,7 +352,7 @@ utils.shallowMerge(Emitter.prototype, AsyncManager.prototype);
 
 module.exports = AsyncManager;
 
-},{"./emitter":7,"./utils":16}],4:[function(require,module,exports){
+},{"./emitter":8,"./utils":17}],5:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -497,7 +501,7 @@ Container.prototype.insertBefore = function(child, ref) {
 
 module.exports = Container;
 
-},{"./emitter":7,"./pure-node":14,"./utils":16}],5:[function(require,module,exports){
+},{"./emitter":8,"./pure-node":15,"./utils":17}],6:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -846,8 +850,9 @@ function notifyUpstreams(space, type, path, value, index) {
 
 module.exports = Context;
 
-},{"./async":3,"./env":8,"./utils":16}],6:[function(require,module,exports){
+},{"./async":4,"./env":9,"./utils":17}],7:[function(require,module,exports){
 var Template = require('./template'),
+	api = require('./api'),
 	Context = require('./context');
 /**
  * use current customTag content
@@ -903,8 +908,7 @@ var customTagEngine = {
  * @param {[type]} templ          [description]
  */
 module.exports = function(apiName, tagName, defaultAttrMap, templ) {
-	var api = context.env.data.api,
-		space = api[apiName] = api[apiName] || {};
+	var space = api[apiName] = api[apiName] || {};
 	space[tagName] = function(attrMap, __yield) {
 		// copy default to attrMap
 		for (var i in defaultAttrMap)
@@ -916,7 +920,7 @@ module.exports = function(apiName, tagName, defaultAttrMap, templ) {
 	return this;
 };
 
-},{"./context":5,"./template":15}],7:[function(require,module,exports){
+},{"./api":3,"./context":6,"./template":16}],8:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 /**
@@ -961,7 +965,7 @@ Emitter.prototype = {
 };
 module.exports = Emitter;
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 (function (global){
 var isServer = (typeof window === 'undefined') && (typeof document === 'undefined'),
 	Emitter = require('./emitter');
@@ -987,7 +991,7 @@ var env = {
 module.exports = env;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./emitter":7}],9:[function(require,module,exports){
+},{"./emitter":8}],10:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 function Filter(f) {
@@ -1052,7 +1056,7 @@ url_encode
 url_decode
  */
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 var Filter = require('./filter'),
 	replacementRegExp = /true|false|null|\$\.(?:[a-zA-Z]\w*(?:\.\w*)*)|\$(?:[a-zA-Z]\w*(?:\.\w*)*)\(?|"[^"]*"|'[^']*'|[a-zA-Z_]\w*(?:\.\w*)*\(?/g,
@@ -1292,7 +1296,7 @@ module.exports = {
 	Interpolable: Interpolable
 };
 
-},{"./filter":9}],11:[function(require,module,exports){
+},{"./filter":10}],12:[function(require,module,exports){
 var utils = require('../utils'),
 	PureNode = require('../pure-node'),
 	Container = require('../container'),
@@ -1732,7 +1736,7 @@ View.prototype.call = function(node, context) {
 
 module.exports = engine;
 
-},{"../container":4,"../context":5,"../pure-node":14,"../template":15,"../utils":16,"../view":17}],12:[function(require,module,exports){
+},{"../container":5,"../context":6,"../pure-node":15,"../template":16,"../utils":17,"../view":18}],13:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var elenpi = require('elenpi'),
@@ -1797,7 +1801,7 @@ parser.parseListener = function(string) {
 
 module.exports = parser;
 
-},{"./primitive-argument-rules":13,"elenpi":1}],13:[function(require,module,exports){
+},{"./primitive-argument-rules":14,"elenpi":1}],14:[function(require,module,exports){
 var r = require('elenpi').r;
 
 var rules = {
@@ -1820,7 +1824,7 @@ var rules = {
 
 module.exports = rules;
 
-},{"elenpi":1}],14:[function(require,module,exports){
+},{"elenpi":1}],15:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 /**
  * Pure Virtual Node
@@ -1875,13 +1879,14 @@ PureNode.prototype  = {
 
 module.exports = PureNode;
 
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 "use strict";
 
 var utils = require('./utils'),
 	interpolable = require('./interpolable').interpolable,
 	Context = require('./context'),
+	api = require('./api'),
 	listenerParser = require('./parsers/listener-call');
 
 function Template(t) {
@@ -2153,13 +2158,24 @@ Template.prototype = {
 		args.shift();
 		if (typeof name === 'string')
 			name = name.split(':');
-		var method = (name.forEach ? utils.getApiMethod(context.env, name) : name);
+		var method = (name.forEach ? utils.getApiMethod(api, name) : name);
 		if (method.__yView__)
 			return this.exec('mountHere', [method]);
 		else if (method.__yTemplate__)
 			this._queue = this._queue.concat(method._queue);
 		else
 			method.apply(this, args);
+		return this;
+	},
+	addApi: function(name) {
+		var Api = (typeof name === 'string') ? api[name] : name;
+		if (!Api)
+			throw new Error('no template api found with : ' + name);
+		for (var i in Api) {
+			if (!Api.hasOwnProperty(i))
+				continue;
+			this[i] = Api[i];
+		}
 		return this;
 	},
 	mountHere: function(template) {
@@ -2170,17 +2186,6 @@ Template.prototype = {
 	},
 	server: function(templ) {
 		return this.exec('server', [templ]);
-	},
-	api: function(name) {
-		var Api = (typeof name === 'string') ? context.env.data.api[name] : name;
-		if (!Api)
-			throw new Error('no template api found with : ' + name);
-		for (var i in Api) {
-			if (!Api.hasOwnProperty(i))
-				continue;
-			this[i] = Api[i];
-		}
-		return this;
 	},
 	suspendUntil: function(xpr) {
 		return this.exec('suspendUntil', [interpolable(xpr), this._queue.length + 1, this], false, true);
@@ -2214,7 +2219,7 @@ Template.prototype.cl = Template.prototype.setClass;
 
 module.exports = Template;
 
-},{"./context":5,"./interpolable":10,"./parsers/listener-call":12,"./utils":16}],16:[function(require,module,exports){
+},{"./api":3,"./context":6,"./interpolable":11,"./parsers/listener-call":13,"./utils":17}],17:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 //__________________________________________________________ UTILS
 
@@ -2457,19 +2462,19 @@ var utils = module.exports = {
 	 * @param  {[type]} path [description]
 	 * @return {[type]}      [description]
 	 */
-	getApiMethod: function(env, path) {
+	getApiMethod: function(api, path) {
 		if (!path.forEach)
 			path = path.split(':');
 		if (path.length !== 2)
 			throw new Error('yamvish method call badly formatted : ' + path.join(':'));
-		var output = env.data.api[path[0]][path[1]];
+		var output = api[path[0]][path[1]];
 		if (!output)
 			throw new Error('no template/container found with "' + path.join(':') + '"');
 		return output;
 	}
 };
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 var Template = require('./template');
 
 function View(data, parent, path) {
@@ -2494,5 +2499,5 @@ View.prototype = new Template();
 
 module.exports = View;
 
-},{"./template":15}]},{},[2])(2)
+},{"./template":16}]},{},[2])(2)
 });
