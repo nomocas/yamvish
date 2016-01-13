@@ -225,159 +225,6 @@
 
 },{}],2:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-
-(function() {
-	'use strict';
-
-	var elenpi = require('elenpi'),
-		r = elenpi.r;
-
-	var casting = {
-		i: function(input) { // integer
-			var r = parseInt(input, 10);
-			return (!isNaN(r) && r !== Infinity) ? r : null;
-		},
-		f: function(input) { // float
-			var r = parseFloat(input);
-			return (!isNaN(r) && r !== Infinity) ? r : null;
-		},
-		b: function(input) { // bool
-			if (input === 'true')
-				return true;
-			if (input === 'false')
-				return false;
-			return null;
-		},
-		q: function(input) { // query
-			return (input[0] !== '?') ? null : input;
-		},
-		s: function(input) { // string
-			return (input[0] == '?') ? null : input;
-		}
-	};
-
-	var rules = {
-		disjonction: r()
-			.regExp(/^\[\s*/)
-			.oneOrMore('disjonction',
-				r().rule('xpr'),
-				r().regExp(/^\s*,\s*/)
-			)
-			.regExp(/^\s*\]/),
-
-		cast: r()
-			.regExp(/^([\w-_]+):/, true, function(descriptor, cap) {
-				descriptor.cast = casting[cap[1]];
-				if (!descriptor.cast)
-					throw new Error('routes : no cast method as : ' + cap[1]);
-			}),
-
-		end: r()
-			.regExp(/^\$/, false, 'end'),
-
-		steps: r()
-			.zeroOrMore('steps',
-				r().rule('xpr'),
-				r().regExp(/^\//)
-			),
-
-		block: r()
-			.regExp(/^\(\s*/)
-			.rule('steps')
-			.regExp(/^\s*\)/),
-
-		key: r()
-			.regExp(/^[0-9\w-_\.]+/, false, 'key'),
-
-		xpr: r()
-			.oneOf(null, [
-				r().regExp(/^\!/, false, 'not'),
-				r().regExp(/^\?/, false, 'optional')
-			], true)
-			.oneOf(null, [r().rule('cast').rule('key'), 'end', 'disjonction', 'block']),
-
-		route: r()
-			.regExp(/^\./, true, 'local')
-			.regExp(/^\//)
-			.rule('steps')
-	};
-
-	var parser = new elenpi.Parser(rules, 'route');
-
-	var RouteStep = function(route) {};
-
-	RouteStep.prototype.match = function(descriptor) {
-		var ok = false;
-		if (descriptor.route.length >= descriptor.index) {
-			if (this.end) {
-				if (descriptor.index === descriptor.route.length)
-					ok = true;
-			} else if (this.steps) { // block
-				ok = this.steps.every(function(step) {
-					return step.match(descriptor);
-				});
-			} else if (this.disjonction) {
-				ok = this.disjonction.some(function(step) {
-					return step.match(descriptor);
-				});
-			} else if (this.cast) { // casted variable
-				var res = this.cast(descriptor.route[descriptor.index]);
-				if (res !== null) {
-					descriptor.output[this.key] = res;
-					descriptor.index++;
-					ok = true;
-				}
-			} else if (descriptor.route[descriptor.index] === this.key) {
-				descriptor.index++;
-				ok = true;
-			}
-		}
-		if (this.not)
-			ok = !ok;
-		else if (!ok && this.optional)
-			return true;
-		return ok;
-	};
-
-	parser.createDescriptor = function() {
-		return new RouteStep();
-	};
-
-	var Route = function(route) {
-		this.original = route;
-		this.parsed = parser.parse(route);
-		if (!this.parsed)
-			throw new Error('route could not be parsed : ' + route);
-	};
-
-	Route.prototype.match = function(descriptor) {
-		if (typeof descriptor === 'string') {
-			var route = descriptor.split('/');
-			if (route[0] === '')
-				route.shift();
-			if (route[route.length - 1] === '')
-				route.pop();
-			descriptor = {
-				route: route,
-				index: 0,
-				output: {}
-			};
-		} else
-			descriptor = {
-				route: descriptor.route,
-				index: this.parsed.local ? descriptor.index : 0,
-				output: {}
-			};
-		if (!this.parsed.match(descriptor))
-			return false;
-		return descriptor;
-	};
-
-	module.exports = Route;
-})();
-
-},{"elenpi":1}],3:[function(require,module,exports){
-/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 // core
 var y = function(t) {
 	return new y.Template(t);
@@ -404,6 +251,7 @@ y.View = require('./lib/view');
 y.view = function(data, parent, path) {
 	return new y.View(data, parent, path);
 };
+y.html = require('./lib/parsers/html-string-to-template');
 
 module.exports = y;
 
@@ -416,28 +264,11 @@ module.exports = y;
 
  */
 
-},{"./lib/api":5,"./lib/async":6,"./lib/container":7,"./lib/context":8,"./lib/custom-tags":9,"./lib/env":11,"./lib/filter":12,"./lib/interpolable":13,"./lib/output-engine/dom":14,"./lib/parsers/listener-call":18,"./lib/pure-node":22,"./lib/template":24,"./lib/utils":25,"./lib/view":26,"elenpi":1}],4:[function(require,module,exports){
-/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-
-var y = require('./core');
-
-y.Virtual = require('./lib/virtual');
-y.router = require('./lib/router');
-
-// parsers
-y.html = require('./lib/parsers/html-string-to-template');
-
-require('./lib/output-engine/string');
-require('./lib/output-engine/twopass');
-
-
-module.exports = y;
-
-},{"./core":3,"./lib/output-engine/string":15,"./lib/output-engine/twopass":16,"./lib/parsers/html-string-to-template":17,"./lib/router":23,"./lib/virtual":27}],5:[function(require,module,exports){
+},{"./lib/api":3,"./lib/async":4,"./lib/container":5,"./lib/context":6,"./lib/custom-tags":7,"./lib/env":9,"./lib/filter":10,"./lib/interpolable":11,"./lib/output-engine/dom":12,"./lib/parsers/html-string-to-template":13,"./lib/parsers/listener-call":14,"./lib/pure-node":18,"./lib/template":19,"./lib/utils":20,"./lib/view":21,"elenpi":1}],3:[function(require,module,exports){
 // simple global object where store apis
 module.exports = {};
 
-},{}],6:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 var Emitter = require('./emitter'),
 	utils = require('./utils');
@@ -522,7 +353,7 @@ utils.shallowMerge(Emitter.prototype, AsyncManager.prototype);
 
 module.exports = AsyncManager;
 
-},{"./emitter":10,"./utils":25}],7:[function(require,module,exports){
+},{"./emitter":8,"./utils":20}],5:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -671,7 +502,7 @@ Container.prototype.insertBefore = function(child, ref) {
 
 module.exports = Container;
 
-},{"./emitter":10,"./pure-node":22,"./utils":25}],8:[function(require,module,exports){
+},{"./emitter":8,"./pure-node":18,"./utils":20}],6:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -1020,7 +851,7 @@ function notifyUpstreams(space, type, path, value, index) {
 
 module.exports = Context;
 
-},{"./async":6,"./env":11,"./utils":25}],9:[function(require,module,exports){
+},{"./async":4,"./env":9,"./utils":20}],7:[function(require,module,exports){
 var Template = require('./template'),
 	api = require('./api'),
 	Context = require('./context');
@@ -1090,7 +921,7 @@ module.exports = function(apiName, tagName, defaultAttrMap, templ) {
 	return this;
 };
 
-},{"./api":5,"./context":8,"./template":24}],10:[function(require,module,exports){
+},{"./api":3,"./context":6,"./template":19}],8:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 /**
@@ -1135,14 +966,13 @@ Emitter.prototype = {
 };
 module.exports = Emitter;
 
-},{}],11:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 (function (global){
 var isServer = (typeof window === 'undefined') && (typeof document === 'undefined'),
 	Emitter = require('./emitter');
 var env = {
 	isServer: isServer,
 	debug: true,
-	api: {},
 	expressionsGlobal: isServer ? global : window,
 	factory: isServer ? null : document,
 	agora: new Emitter(),
@@ -1161,7 +991,7 @@ var env = {
 module.exports = env;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./emitter":10}],12:[function(require,module,exports){
+},{"./emitter":8}],10:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 function Filter(f) {
@@ -1226,7 +1056,7 @@ url_encode
 url_decode
  */
 
-},{}],13:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 var Filter = require('./filter'),
 	replacementRegExp = /true|false|null|\$\.(?:[a-zA-Z]\w*(?:\.\w*)*)|\$(?:[a-zA-Z]\w*(?:\.\w*)*)\(?|"[^"]*"|'[^']*'|[a-zA-Z_]\w*(?:\.\w*)*\(?/g,
@@ -1466,7 +1296,7 @@ module.exports = {
 	Interpolable: Interpolable
 };
 
-},{"./filter":12}],14:[function(require,module,exports){
+},{"./filter":10}],12:[function(require,module,exports){
 var utils = require('../utils'),
 	PureNode = require('../pure-node'),
 	Container = require('../container'),
@@ -1906,461 +1736,7 @@ View.prototype.call = function(node, context) {
 
 module.exports = engine;
 
-},{"../container":7,"../context":8,"../pure-node":22,"../template":24,"../utils":25,"../view":26}],15:[function(require,module,exports){
-var utils = require('../utils'),
-	openTags = require('../parsers/open-tags'),
-	strictTags = /span|script|meta/,
-	Context = require('../context'),
-	Template = require('../template'),
-	View = require('../view');
-
-// String Output Descriptor
-function SOD() {
-	this.attributes = '';
-	this.classes = '';
-	this.children = '';
-	this.style = '';
-}
-
-function tagOutput(descriptor, innerDescriptor, name) {
-	var out = '<' + name + innerDescriptor.attributes;
-	if (innerDescriptor.style)
-		out += ' style="' + innerDescriptor.style + '"';
-	if (innerDescriptor.classes)
-		out += ' class="' + innerDescriptor.classes + '"';
-	if (innerDescriptor.children)
-		descriptor.children += out + '>' + innerDescriptor.children + '</' + name + '>';
-	else if (openTags.test(name))
-		descriptor.children += out + '>';
-	else if (strictTags.test(name))
-		descriptor.children += out + '></' + name + '>';
-	else
-		descriptor.children += out + '/>';
-}
-utils.tagOutput = tagOutput;
-
-var methods = {
-	SOD: SOD,
-	//_________________________________ local context management
-	context: function(context, descriptor, args) {
-		var data = args[0],
-			parent = args[1] || context,
-			path = args[2];
-		descriptor.context = new Context(data, parent, path);
-	},
-	//_________________________________________ EACH
-	each: function(context, descriptor, args) {
-		var path = args[0],
-			values = (typeof path === 'string') ? context.get(path) : path;
-		if (values && values.length) {
-			var template = args[1];
-			for (var i = 0, len = values.length; i < len; ++i)
-				template.toHTMLString(new Context(values[i], context), descriptor);
-		} else if (args[2])
-			args[2].toHTMLString(context, descriptor);
-	},
-	// ____________________________________ WITH
-	with: function(context, descriptor, args) {
-		var path = args[0],
-			template = args[1];
-		var ctx = new Context(typeof path === 'string' ? context.get(path) : path, context, path);
-		template.toHTMLString(ctx, descriptor, container);
-	},
-	//______________________________________________
-	if: function(context, descriptor, args) {
-		var ok, condition = args[0],
-			successTempl = args[1],
-			failTempl = args[2];
-		if (condition && condition.__interpolable__)
-			ok = condition.output(context);
-		else if (type === 'function')
-			ok = condition.call(this, context);
-		var sod = new SOD();
-		if (ok)
-			successTempl.toHTMLString(context, sod);
-		else if (failTempl)
-			failTempl.toHTMLString(context, sod);
-		if (sod.children)
-			descriptor.children += sod.children;
-	},
-	switch: function(context, descriptor, args) {
-		var xpr = args[0],
-			dico = args[1],
-			value = xpr.output(context),
-			templ = dico[value] || dico['default'];
-		if (templ) {
-			var sod = new SOD();
-			templ.toHTMLString(context, sod);
-			if (sod.children)
-				descriptor.children += sod.children;
-		}
-	},
-	//________________________________ TAGS
-	tag: function(context, descriptor, originalArgs) {
-		var name = originalArgs[0],
-			template = originalArgs[1];
-		var newDescriptor = new SOD();
-		template.toHTMLString(context, newDescriptor);
-		tagOutput(descriptor, newDescriptor, name);
-	},
-	text: function(context, descriptor, args) {
-		var value = args[0];
-		descriptor.children += value.__interpolable__ ? value.output(context) : value;
-	},
-	br: function(context, descriptor) {
-		descriptor.children += '<br>';
-	},
-	//______________________________________________ ATTRIBUTES
-	attr: function(context, descriptor, args) {
-		var name = args[0],
-			value = args[1];
-		descriptor.attributes += ' ' + name;
-		if (value)
-			descriptor.attributes += '="' + (value.__interpolable__ ? value.output(context) : value) + '"';
-	},
-	disabled: function(context, descriptor, args) {
-		var value = args[0];
-		if (value === undefined || context.get(value))
-			descriptor.attributes += ' disabled';
-	},
-	val: function(context, descriptor, args) {
-		var path = args[0],
-			value = args[1];
-		descriptor.attributes += ' value="' + (value.__interpolable__ ? value.output(context) : value) + '"';
-	},
-	setClass: function(context, descriptor, args) {
-		var name = args[0],
-			flag = args[1];
-		if ((flag.__interpolable__ && flag.output(context)) || flag)
-			descriptor.classes += ' ' + (name.__interpolable__ ? name.output(context) : name);
-	},
-	css: function(context, descriptor, args) {
-		var prop = args[0],
-			value = args[1];
-		descriptor.style += prop + ':' + (value.__interpolable__ ? value.output(context) : value);
-	},
-	visible: function(context, descriptor, args) {
-		var flag = args[0],
-			val = flag.__interpolable__ ? flag.output(context) : flag;
-		if (!val)
-			descriptor.style += 'display:none;';
-	},
-	//_________________________________ EVENTS
-	on: function() {},
-	off: function() {},
-	//_________________________________ CLIENT/SERVER
-	client: function(context, descriptor, args) {
-		if (context.env.data.isServer)
-			return;
-		args[0].toHTMLString(context, descriptor);
-	},
-	server: function(context, descriptor, args) {
-		if (!context.env.data.isServer)
-			return;
-		args[0].toHTMLString(context, descriptor);
-	},
-	//_______________________________ SUSPEND RENDER
-	suspendUntil: function(context, descriptor, args) {
-		var xpr = args[0],
-			index = args[1],
-			templ = args[2],
-			val = xpr.__interpolable__ ? xpr.output(context) : xpr,
-			rest = new Template(templ._queue.slice(index));
-		if (val)
-			rest.toHTMLString(context, descriptor);
-	}
-};
-
-View.prototype.toHTMLString = function(context, descriptor) {
-	var sod = new SOD();
-	Template.prototype.toHTMLString.call(this, context, sod);
-	descriptor.children += sod.children;
-	return descriptor.children;
-};
-Template.prototype.toHTMLString = function(context, descriptor) {
-	context = context || new Context();
-	descriptor = descriptor ||  new SOD();
-	var handler = this._queue[0],
-		nextIndex = 0,
-		f;
-	while (handler) {
-		if (handler.engineBlock)
-			f = handler.engineBlock.string;
-		else
-			f = handler.func || methods[handler.name];
-		f(descriptor.context || context, descriptor, handler.args);
-		handler = this._queue[++nextIndex];
-	}
-	return descriptor.children;
-};
-
-module.exports = methods;
-
-},{"../context":8,"../parsers/open-tags":19,"../template":24,"../utils":25,"../view":26}],16:[function(require,module,exports){
-var utils = require('../utils'),
-	Template = require('../template'),
-	Context = require('../context'),
-	stringEngine = require('./string'),
-	SOD = stringEngine.SOD,
-	View = require('../view');
-
-var firstMethods = {
-	//_________________________________ local context management
-	context: function(context, args) {
-		var data = args[0],
-			parent = args[1] || context,
-			path = args[2],
-			ctx = new Context(data, parent, path);
-		(context.children = context.children || []).push(ctx);
-		return ctx;
-	},
-	// ____________________________________ WITH
-	with: function(context, descriptor, args) {
-		var path = args[0],
-			// produce local context and store it in parent 
-			ctx = new Context(typeof path === 'string' ? context.get(path) : path, context, path);
-		(context.children = context.children || []).push(ctx);
-	},
-	//________________________________ Conditonal node rendering
-	if: function(context, args) {
-		var ok, condition = args[0],
-			successTempl = args[1],
-			failTempl = args[2];
-		var exec = function(ok, type, path) {
-			if (ok)
-				firstPass(successTempl, context);
-			else if (failTempl)
-				firstPass(failTempl, context);
-		};
-		if (condition && condition.__interpolable__) {
-			ok = condition.output(context);
-			condition.subscribeTo(context, exec);
-		} else if (typeof condition === 'function')
-			ok = condition.call(this, context);
-		exec(ok, 'set');
-	},
-	//_________________________________________ EACH
-	each: function(context, args) {
-		var path = args[0],
-			template = args[1],
-			emptyTemplate = args[2],
-			emptyInitialised = false,
-			data = path,
-			contexts = [];
-
-		var updateArray = function(value, type, path, index) {
-			// on array update : produce or maintain associated local contexts array
-			var ctx, ctxs = contexts;
-			switch (type) {
-				case 'reset':
-				case 'set':
-
-					if (!value.length && !emptyInitialised)
-						firstPass(emptyTemplate, context); // traverse empty template with firstPass
-
-					var j = 0;
-					for (var len = value.length; j < len; ++j) // reset existing or create new ctx 
-					{
-						if (ctxs[j]) // reset existing
-							ctxs[j].reset(value[j]);
-						else { // create new ctx
-							ctx = new Context(value[j], context);
-							ctxs.push(ctx);
-							firstPass(template, ctx); // traverse child template with firstPass
-						}
-					}
-					if (j < ctxs.length) // remove additional ctx that is not used any more
-					{
-						for (var i = j, len = ctxs.length; i < len; ++i)
-							ctxs[i].destroy();
-						ctxs.splice(j);
-					}
-					break;
-				case 'removeAt':
-					ctxs.splice(index, 1);
-					break;
-				case 'push':
-					ctx = new Context(value, context)
-					ctxs.push(ctx);
-					firstPass(template, ctx);
-					break;
-			}
-		};
-
-		if (typeof path === 'string') {
-			context.subscribe(path, updateArray);
-			context.subscribe(path + '.*', function(value, type, path, key) {
-				// on array's item update
-				var ctx = contexts[key];
-				if (ctx)
-					return ctx.reset(value); // update associated context
-			});
-			data = context.get(path);
-		}
-		if (data)
-			updateArray(data, 'set');
-		// store local contexts array in parent
-		(context.children = context.children || []).push(contexts);
-	},
-	//________________________________ TAGS
-	tag: function(context, args) {
-		var name = args[0],
-			template = args[1];
-		if (template)
-			firstPass(template, context); // traverse tag template with frstPass
-	},
-	//_________________________________ CLIENT/SERVER
-	client: function(context, args) {
-		if (context.env.data.isServer)
-			return;
-		firstPass(args[0], context); // traverse client template with frstPass
-	},
-	server: function(context, args) {
-		if (!context.env.data.isServer)
-			return;
-		firstPass(args[0], context); // traverse server template with frstPass
-	}
-};
-
-var secondMethods = {
-	//_________________________________ local context management
-	context: function(context, descriptor) {
-		if (context.children) // catch context produced in firstPass
-			descriptor.context = context.children.shift();
-	},
-	// ____________________________________ WITH
-	with: function(context, descriptor, args) {
-		if (!context.children)
-			return;
-		var path = args[0],
-			template = args[1],
-			ctx = context.children.shift(); // catch context produced in firstPass
-		secondPass(template, ctx, descriptor);
-	},
-	//_________________________________________ EACH
-	each: function(context, descriptor, args) {
-		if (!context.children)
-			return;
-		var contexts = context.children.shift(); // catch contexts array produced in firstPass
-		if (contexts && contexts.length) {
-			var template = args[1],
-				emptyTemplate = args[2];
-			if (!contexts.length)
-				secondPass(emptyTemplate, context, descriptor);
-			else
-				for (var i = 0, len = contexts.length; i < len; ++i)
-					secondPass(template, contexts[i], descriptor);
-		}
-	},
-	//________________________________ TAGS
-	tag: function(context, descriptor, args) {
-		var name = args[0],
-			template = args[1],
-			newDescriptor = new SOD();
-		if (template)
-			secondPass(template, context, newDescriptor);
-		utils.tagOutput(descriptor, newDescriptor, name);
-	},
-	//________________________________ Conditonal node rendering
-	if: function(context, descriptor, args) {
-		var ok, condition = args[0],
-			successTempl = args[1],
-			failTempl = args[2];
-		if (condition && condition.__interpolable__)
-			ok = condition.output(context);
-		else if (type === 'function')
-			ok = condition.call(this, context);
-		if (ok)
-			secondPass(successTempl, context, descriptor);
-		else if (failTempl)
-			secondPass(failTempl, context, descriptor);
-	},
-	//_________________________________ CLIENT/SERVER
-	client: function(context, descriptor, args) {
-		if (context.env.data.isServer)
-			return;
-		secondPass(args[0], context, descriptor);
-	},
-	server: function(context, descriptor, args) {
-		if (!context.env.data.isServer)
-			return;
-		secondPass(args[0], context, descriptor);
-	},
-	contentSwitch: null,
-	cssSwitch: null
-};
-
-function secondPass(template, context, descriptor) {
-	// apply string rendering only
-	descriptor = descriptor ||  new SOD();
-	var handler,
-		f;
-	for (var i = 0, len = template._queue.length; i < len; ++i) {
-		handler = template._queue[i];
-		if (handler.engineBlock)
-			f = handler.engineBlock.twopass.second || handler.engineBlock.string;
-		else if (handler.func) {
-			if (handler.firstPass)
-				continue;
-			else
-				f = handler.func;
-		} else if (secondMethods[handler.name])
-			f = secondMethods[handler.name];
-		else
-			f = stringEngine[handler.name];
-
-		f(descriptor.context || context, descriptor, handler.args);
-	}
-}
-
-function firstPass(template, context) {
-	// apply contexts construction only
-	var handler,
-		f,
-		newContext,
-		ctx;
-	for (var i = 0, len = template._queue.length; i < len; ++i) {
-		handler = template._queue[i];
-		if (handler.engineBlock) {
-			f = handler.engineBlock.twopass.first;
-			if (!f)
-				continue;
-		} else if (handler.func) {
-			if (!handler.firstPass)
-				continue;
-			else
-				f = handler.func;
-		} else if (!firstMethods[handler.name])
-			continue;
-		else
-			f = firstMethods[handler.name];
-		ctx = f(newContext || context, handler.args);
-		if (ctx && ctx.__yContext__)
-			newContext = ctx;
-	}
-}
-
-Template.prototype.twopass = View.prototype.twopass = function(context) {
-	context = context || new Context();
-	firstPass(this, context); // apply first pass : construct contexts
-	var self = this;
-	// wait for context stabilisation
-	return context.stabilised().then(function(context) {
-		// then apply second pass : render to string
-		var descriptor = new SOD();
-		secondPass(self, context, descriptor);
-		return descriptor.children;
-	});
-};
-
-module.exports = {
-	firstMethods: firstMethods,
-	secondMethods: secondMethods,
-	firstPass: firstPass,
-	secondPass: secondPass
-};
-
-},{"../context":8,"../template":24,"../utils":25,"../view":26,"./string":15}],17:[function(require,module,exports){
+},{"../container":5,"../context":6,"../pure-node":18,"../template":19,"../utils":20,"../view":21}],13:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var elenpi = require('elenpi'),
@@ -2516,7 +1892,7 @@ parser.createDescriptor = function() {
 
 module.exports = parser;
 
-},{"../template":24,"./open-tags":19,"./string-to-template":21,"elenpi":1}],18:[function(require,module,exports){
+},{"../template":19,"./open-tags":15,"./string-to-template":17,"elenpi":1}],14:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var elenpi = require('elenpi'),
@@ -2581,10 +1957,10 @@ parser.parseListener = function(string) {
 
 module.exports = parser;
 
-},{"./primitive-argument-rules":20,"elenpi":1}],19:[function(require,module,exports){
+},{"./primitive-argument-rules":16,"elenpi":1}],15:[function(require,module,exports){
 module.exports = /(br|input|img|area|base|col|command|embed|hr|img|input|keygen|link|meta|param|source|track|wbr)/;
 
-},{}],20:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 var r = require('elenpi').r;
 
 var rules = {
@@ -2607,7 +1983,7 @@ var rules = {
 
 module.exports = rules;
 
-},{"elenpi":1}],21:[function(require,module,exports){
+},{"elenpi":1}],17:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var elenpi = require('elenpi'),
@@ -2686,7 +2062,7 @@ module.exports = parser;
 console.log(y.expression.parseTemplate("click ( '12', 14, true, p(2, 4, span( false).p())). div(12345)"));
  */
 
-},{"../template":24,"./primitive-argument-rules":20,"elenpi":1}],22:[function(require,module,exports){
+},{"../template":19,"./primitive-argument-rules":16,"elenpi":1}],18:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 /**
  * Pure Virtual Node
@@ -2741,159 +2117,7 @@ PureNode.prototype  = {
 
 module.exports = PureNode;
 
-},{}],23:[function(require,module,exports){
-var utils = require('./utils'),
-	View = require('./view'),
-	Template = require('./template'),
-	Route = require('routedsl');
-
-function findParentRouter(context) {
-	var parent = context.parent;
-	if (!parent)
-		return null;
-	return parent && parent.isRouted ? parent : findParentRouter(parent);
-}
-
-function parseURL(url) {
-	var route = url.split('/');
-	if (route[0] === '')
-		route.shift();
-	if (route[route.length - 1] === '')
-		route.pop();
-	return {
-		length: route.length,
-		route: route,
-		index: 0
-	};
-}
-
-Template.prototype.clickTo = function(href, title, data) {
-	return this.client(
-		y().click(function(e) {
-			if (e.preventDefault())
-				e.preventDefault();
-			if (href !== (location.pathname + location.search)) {
-				this.env.data.agora.emit('route:update', href, title || '', data);
-				window.history.pushState({
-					href: href,
-					title: title,
-					data: data
-				}, title  || '', href);
-				document.title = title || '';
-			}
-		})
-	);
-};
-
-var settings = {
-	parser: function(route) {
-		return new Route(route);
-	},
-	bindHistory: function(context) {
-		if (!context.env.data.isServer) {
-			var route = parseURL(location.pathname + (location.search || ''));
-			context.isRouted = true;
-			context.set('$route', route);
-			context.onAgora('route:update', function(route, title, state) {
-				this.set('$route', route);
-			});
-			// popstate event from back/forward in browser
-			window.addEventListener('popstate', function(e) {
-				var route = parseURL(location.pathname + (location.search || ''));
-				context.env.data.agora.emit('route:update', route);
-				document.title = e.state ? (e.state.title || '') : '';
-			});
-		}
-	}
-};
-
-View.prototype.route = function(route, handler) {
-	var index = this._queue.length + 1,
-		self = this,
-		route = settings.parser(route);
-	return this.exec({
-		dom: function(context, container, args) {
-			var parentRouter,
-				currentRoute,
-				oldRoute,
-				current,
-				initialised = false,
-				fakeNode = utils.hide(context.env.data.factory.createElement('div')),
-				restTemplate = new Template(self._queue.slice(index));
-			container.appendChild(fakeNode);
-			current = fakeNode;
-			context.isRouted = true;
-
-			var exec = function($route, type) {
-				if (!container.mountPoint || $route === oldRoute)
-					return;
-				oldRoute = $route;
-				var matched = route.match($route.lastMatched || $route); //route.match($route);
-				if (matched) {
-					$route.lastMatched = matched;
-					if (handler)
-						handler.call(context, matched);
-					context.set('$route', matched);
-					if (!initialised) {
-						restTemplate.call(container, context);
-						restTemplate = null;
-						initialised = true;
-					}
-					if (current === container)
-						return;
-					current = container;
-					var nextSibling = utils.findNextSibling(fakeNode);
-					container.removeChild(fakeNode);
-					container.childNodes.forEach(function(child) {
-						utils.insertBefore(container.mountPoint, child, nextSibling);
-					});
-				} else {
-					if (current === fakeNode)
-						return;
-					current = fakeNode;
-					container.appendChild(fakeNode);
-					container.childNodes.forEach(function(child) {
-						if (child !== fakeNode) {
-							if (child.__yPureNode__)
-								utils.unmountPureNode(child);
-							else if (child.parentNode)
-								child.parentNode.removeChild(child);
-						}
-					});
-				}
-			};
-			parentRouter = findParentRouter(context);
-			if (parentRouter) {
-				container.binds = container.binds ||  [];
-				parentRouter.subscribe('$route', exec, false, container.binds);
-				currentRoute = parentRouter.data.$route;
-			}
-			container.on('mounted', function() {
-				var currentRoute = parentRouter ? parentRouter.data.$route : null;
-				if (currentRoute)
-					exec(currentRoute, 'set');
-			});
-
-			if (currentRoute)
-				exec(currentRoute, 'set');
-		},
-		string: function(context, descriptor, args) {
-
-		},
-		twopass: {
-			firstPass: function(context, args) {
-
-			},
-			secondPass: function(context, descriptor, args) {
-
-			}
-		}
-	}, null, false, true);
-};
-
-module.exports = settings;
-
-},{"./template":24,"./utils":25,"./view":26,"routedsl":2}],24:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 "use strict";
 
@@ -3233,7 +2457,7 @@ Template.prototype.cl = Template.prototype.setClass;
 
 module.exports = Template;
 
-},{"./api":5,"./context":8,"./interpolable":13,"./parsers/listener-call":18,"./utils":25}],25:[function(require,module,exports){
+},{"./api":3,"./context":6,"./interpolable":11,"./parsers/listener-call":14,"./utils":20}],20:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 //__________________________________________________________ UTILS
 
@@ -3488,7 +2712,7 @@ var utils = module.exports = {
 	}
 };
 
-},{}],26:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 var Template = require('./template');
 
 function View(data, parent, path) {
@@ -3513,91 +2737,5 @@ View.prototype = new Template();
 
 module.exports = View;
 
-},{"./template":24}],27:[function(require,module,exports){
-/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
-
-var utils = require('./utils'),
-	Emitter = require('./emitter'),
-	PureNode = require('./pure-node'),
-	openTags = require('./parsers/open-tags');
-
-//_______________________________________________________ VIRTUAL NODE
-
-/**
- * Virtual Node
- *
- * A minimal mock of DOMElement. It gathers PureNode and Emitter API and add attributes management (add and remove).
- * 
- * @param {Object} option (optional) option object : { ?tagName:String, ?nodeValue:String } + options from PureNode
- */
-function Virtual(tagName, nodeValue) {
-	PureNode.call(this);
-	this.__yVirtual__ = true;
-	this.tagName = tagName;
-	if (nodeValue)
-		this.nodeValue = nodeValue;
-};
-
-Virtual.prototype  = {
-	setAttribute: function(name, value) {
-		(this.attributes = this.attributes || {})[name] = value;
-	},
-	removeAttribute: function(name, value) {
-		if (!this.attributes)
-			return;
-		delete this.attributes[name];
-	},
-	addEventListener: Emitter.prototype.on,
-	removeEventListener: Emitter.prototype.off,
-	dispatchEvent: Emitter.prototype.emit
-};
-
-// apply inheritance
-utils.shallowMerge(PureNode.prototype, Virtual.prototype);
-
-/**
- * Virtual to String output
- * @return {String} the String representation of Virtual node
- */
-Virtual.prototype.toString = function() {
-	if (this.tagName === 'textnode')
-		return this.nodeValue;
-	var node = '<' + this.tagName;
-	if (this.id)
-		node += ' id="' + this.id + '"';
-	for (var a in this.attributes)
-		node += ' ' + a + '="' + this.attributes[a] + '"';
-	if (this.classes) {
-		var classes = Object.keys(this.classes);
-		if (classes.length)
-			node += ' class="' + classes.join(' ') + '"';
-	}
-	if (this.childNodes && this.childNodes.length) {
-		node += '>';
-		for (var j = 0, len = this.childNodes.length; j < len; ++j)
-			node += this.childNodes[j].toString();
-		node += '</' + this.tagName + '>';
-	} else if (this.scriptContent)
-		node += '>' + this.scriptContent + '</script>';
-	else if (openTags.test(this.tagName))
-		node += '>';
-	else
-		node += ' />';
-	return node;
-};
-
-
-// Virtual Factory : mimic document.createElement but return a virtual node
-Virtual.createElement = function(tagName) {
-	return new Virtual(tagName);
-};
-
-// Virtual Factory : mimic document.createTextNode but return a virtual node
-Virtual.createTextNode = function(value) {
-	return new Virtual('textnode', value);
-};
-
-module.exports = Virtual;
-
-},{"./emitter":10,"./parsers/open-tags":19,"./pure-node":22,"./utils":25}]},{},[4])(4)
+},{"./template":19}]},{},[2])(2)
 });

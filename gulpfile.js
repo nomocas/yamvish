@@ -24,10 +24,6 @@ gulp.task('uglify', function() {
         .pipe(uglify())
         .pipe(rename('yamvish.min.js'))
         .pipe(gulp.dest('./dist'));
-    gulp.src('dist/yamvish.core.js')
-        .pipe(uglify())
-        .pipe(rename('yamvish.core.min.js'))
-        .pipe(gulp.dest('./dist'));
 });
 
 //___________________ browserify

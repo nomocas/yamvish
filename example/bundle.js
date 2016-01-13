@@ -225,6 +225,342 @@
 
 },{}],2:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
+
+(function() {
+	'use strict';
+
+	var elenpi = require('elenpi'),
+		r = elenpi.r;
+
+	var casting = {
+		i: function(input) { // integer
+			var r = parseInt(input, 10);
+			return (!isNaN(r) && r !== Infinity) ? r : null;
+		},
+		f: function(input) { // float
+			var r = parseFloat(input);
+			return (!isNaN(r) && r !== Infinity) ? r : null;
+		},
+		b: function(input) { // bool
+			if (input === 'true')
+				return true;
+			if (input === 'false')
+				return false;
+			return null;
+		},
+		q: function(input) { // query
+			return (input[0] !== '?') ? null : input;
+		},
+		s: function(input) { // string
+			return (input[0] == '?') ? null : input;
+		}
+	};
+
+	var rules = {
+		disjonction: r()
+			.regExp(/^\[\s*/)
+			.oneOrMore('disjonction',
+				r().rule('xpr'),
+				r().regExp(/^\s*,\s*/)
+			)
+			.regExp(/^\s*\]/),
+
+		cast: r()
+			.regExp(/^([\w-_]+):/, true, function(descriptor, cap) {
+				descriptor.cast = casting[cap[1]];
+				if (!descriptor.cast)
+					throw new Error('routes : no cast method as : ' + cap[1]);
+			}),
+
+		end: r()
+			.regExp(/^\$/, false, 'end'),
+
+		steps: r()
+			.zeroOrMore('steps',
+				r().rule('xpr'),
+				r().regExp(/^\//)
+			),
+
+		block: r()
+			.regExp(/^\(\s*/)
+			.rule('steps')
+			.regExp(/^\s*\)/),
+
+		key: r()
+			.regExp(/^[0-9\w-_\.]+/, false, 'key'),
+
+		xpr: r()
+			.oneOf(null, [
+				r().regExp(/^\!/, false, 'not'),
+				r().regExp(/^\?/, false, 'optional')
+			], true)
+			.oneOf(null, [r().rule('cast').rule('key'), 'end', 'disjonction', 'block']),
+
+		route: r()
+			.regExp(/^\.|>/, true, function(descriptor, cap) {
+				descriptor.local = true;
+				if (cap[0] === '>')
+					descriptor.lastMatched = true;
+			})
+			.regExp(/^\//)
+			.rule('steps')
+	};
+
+	var parser = new elenpi.Parser(rules, 'route');
+
+	var RouteStep = function(route) {};
+
+	RouteStep.prototype.match = function(descriptor) {
+		var ok = false;
+		if (descriptor.route.length >= descriptor.index) {
+			if (this.end) {
+				if (descriptor.index === descriptor.route.length)
+					ok = true;
+			} else if (this.steps) { // block
+				ok = this.steps.every(function(step) {
+					return step.match(descriptor);
+				});
+			} else if (this.disjonction) {
+				ok = this.disjonction.some(function(step) {
+					return step.match(descriptor);
+				});
+			} else if (this.cast) { // casted variable
+				var res = this.cast(descriptor.route[descriptor.index]);
+				if (res !== null) {
+					descriptor.params[this.key] = res;
+					descriptor.index++;
+					ok = true;
+				}
+			} else if (descriptor.route[descriptor.index] === this.key) {
+				descriptor.index++;
+				ok = true;
+			}
+		}
+		if (this.not)
+			ok = !ok;
+		else if (!ok && this.optional)
+			return true;
+		return ok;
+	};
+
+	parser.createDescriptor = function() {
+		return new RouteStep();
+	};
+
+	function Match(route, index) {
+		this.route = route;
+		this.index = index;
+		this.params = {};
+	}
+
+	Match.prototype.toString = function() {
+		return '/' + this.route.join('/') + ' (' + this.index + ':' + JSON.stringify(this.params) + ')';
+	};
+
+	var Route = function(route) {
+		this.original = route;
+		this.parsed = parser.parse(route);
+		if (!this.parsed)
+			throw new Error('route could not be parsed : ' + route);
+		if (this.parsed.lastMatched)
+			this.lastMatched = this.parsed.lastMatched;
+	};
+
+	Route.prototype.match = function(descriptor) {
+		if (typeof descriptor === 'string') {
+			var route = descriptor.split('/');
+			if (route[0] === '')
+				route.shift();
+			if (route[route.length - 1] === '')
+				route.pop();
+			descriptor = new Match(route, 0);
+		} else
+			descriptor = new Match(descriptor.route, this.parsed.local ? descriptor.index : 0);
+		if (!this.parsed.match(descriptor))
+			return false;
+		return descriptor;
+	};
+
+	module.exports = Route;
+})();
+
+},{"elenpi":1}],3:[function(require,module,exports){
+var utils = require('yamvish/lib/utils'),
+	View = require('yamvish/lib/view'),
+	Template = require('yamvish/lib/template'),
+	Route = require('routedsl');
+
+function findParentRouter(context) {
+	var parent = context.parent;
+	if (!parent)
+		return null;
+	return parent && parent.isRouted ? parent : findParentRouter(parent);
+}
+
+function parseURL(url) {
+	var route = url.split('/');
+	if (route[0] === '')
+		route.shift();
+	if (route[route.length - 1] === '')
+		route.pop();
+	return {
+		length: route.length,
+		route: route,
+		index: 0
+	};
+}
+
+Template.prototype.clickTo = function(href, title, data) {
+	return this.client(
+		y().click(function(e) {
+			if (e.preventDefault())
+				e.preventDefault();
+			if (href !== (location.pathname + location.search)) {
+				this.toAgora('route:update', href, title || '', data);
+				window.history.pushState({
+					href: href,
+					title: title,
+					data: data
+				}, title  || '', href);
+				document.title = title || '';
+			}
+		})
+	);
+};
+
+var router = {
+	parser: function(route) {
+		return new Route(route);
+	},
+	bindHistory: function(context) {
+		if (!context.env.data.isServer) {
+			var route = parseURL(location.pathname + (location.search || ''));
+			context.isRouted = true;
+			context.set('$route', route);
+			context.onAgora('route:update', function(route, title, state) {
+				this.set('$route', route);
+			});
+			// popstate event from back/forward in browser
+			window.addEventListener('popstate', function(e) {
+				var route = parseURL(location.pathname + (location.search || ''));
+				context.toAgora('route:update', route);
+				document.title = e.state ? (e.state.title || '') : '';
+			});
+		}
+	}
+};
+
+View.prototype.route = function(route, handler) {
+	var index = this._queue.length + 1,
+		self = this,
+		route = router.parser(route);
+	return this.exec({
+		// dom output
+		dom: function(context, container, args) {
+			var parentRouter,
+				currentRoute,
+				oldRoute,
+				current,
+				resumed = false,
+				fakeNode = utils.hide(context.env.data.factory.createElement('div')),
+				restTemplate = new Template(self._queue.slice(index));
+
+			container.appendChild(fakeNode);
+			current = fakeNode;
+			context.isRouted = true;
+
+			var exec = function($route, type) {
+				if (!container.mountPoint || $route === oldRoute)
+					return;
+				oldRoute = $route;
+				var matched = route.match(route.lastMatched ? ($route.lastMatched || $route) : $route);
+				if (matched) {
+					$route.lastMatched = matched;
+					if (handler)
+						handler.call(context, matched);
+					context.set('$route', matched);
+					if (!resumed) {
+						var mp = container.mountPoint;
+						container.mountPoint = null;
+						restTemplate.call(container, context);
+						restTemplate = null;
+						resumed = true;
+						container.mountPoint = mp;
+					}
+					if (current === container)
+						return;
+					current = container;
+					var nextSibling = utils.findNextSibling(fakeNode);
+					container.removeChild(fakeNode);
+					container.childNodes.forEach(function(child) {
+						utils.insertBefore(container.mountPoint, child, nextSibling);
+					});
+				} else {
+					if (current === fakeNode)
+						return;
+					current = fakeNode;
+					container.appendChild(fakeNode);
+					container.childNodes.forEach(function(child) {
+						if (child !== fakeNode) {
+							if (child.__yPureNode__)
+								utils.unmountPureNode(child);
+							else if (child.parentNode)
+								child.parentNode.removeChild(child);
+						}
+					});
+				}
+			};
+			parentRouter = findParentRouter(context);
+			if (parentRouter) {
+				container.binds = container.binds ||  [];
+				parentRouter.subscribe('$route', exec, false, container.binds);
+				currentRoute = parentRouter.data.$route;
+			}
+			container.on('mounted', function() {
+				var currentRoute = parentRouter ? parentRouter.data.$route : null;
+				if (currentRoute)
+					exec(currentRoute, 'set');
+			});
+
+			if (currentRoute)
+				exec(currentRoute, 'set');
+		},
+
+		// string output
+		string: function(context, descriptor, args) {
+
+		},
+
+		// twopass output
+		twopass: {
+			firstPass: function(context, args) {
+
+			},
+			secondPass: function(context, descriptor, args) {
+
+			}
+		}
+	}, null, false, true);
+};
+
+module.exports = router;
+
+},{"routedsl":2,"yamvish/lib/template":24,"yamvish/lib/utils":25,"yamvish/lib/view":26}],4:[function(require,module,exports){
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
+
+var y = require('../index');
+
+y.Virtual = require('../lib/virtual');
+
+require('../lib/output-engine/string');
+require('../lib/output-engine/twopass');
+
+y.router = require('yamvish-router');
+
+module.exports = y;
+
+},{"../index":5,"../lib/output-engine/string":16,"../lib/output-engine/twopass":17,"../lib/virtual":27,"yamvish-router":3}],5:[function(require,module,exports){
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 // core
 var y = function(t) {
 	return new y.Template(t);
@@ -251,6 +587,7 @@ y.View = require('./lib/view');
 y.view = function(data, parent, path) {
 	return new y.View(data, parent, path);
 };
+y.html = require('./lib/parsers/html-string-to-template');
 
 module.exports = y;
 
@@ -263,11 +600,11 @@ module.exports = y;
 
  */
 
-},{"./lib/api":3,"./lib/async":4,"./lib/container":5,"./lib/context":6,"./lib/custom-tags":7,"./lib/env":9,"./lib/filter":10,"./lib/interpolable":11,"./lib/output-engine/dom":12,"./lib/parsers/listener-call":13,"./lib/pure-node":15,"./lib/template":16,"./lib/utils":17,"./lib/view":18,"elenpi":1}],3:[function(require,module,exports){
+},{"./lib/api":6,"./lib/async":7,"./lib/container":8,"./lib/context":9,"./lib/custom-tags":10,"./lib/env":12,"./lib/filter":13,"./lib/interpolable":14,"./lib/output-engine/dom":15,"./lib/parsers/html-string-to-template":18,"./lib/parsers/listener-call":19,"./lib/pure-node":23,"./lib/template":24,"./lib/utils":25,"./lib/view":26,"elenpi":1}],6:[function(require,module,exports){
 // simple global object where store apis
 module.exports = {};
 
-},{}],4:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 var Emitter = require('./emitter'),
 	utils = require('./utils');
@@ -352,7 +689,7 @@ utils.shallowMerge(Emitter.prototype, AsyncManager.prototype);
 
 module.exports = AsyncManager;
 
-},{"./emitter":8,"./utils":17}],5:[function(require,module,exports){
+},{"./emitter":11,"./utils":25}],8:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -501,7 +838,7 @@ Container.prototype.insertBefore = function(child, ref) {
 
 module.exports = Container;
 
-},{"./emitter":8,"./pure-node":15,"./utils":17}],6:[function(require,module,exports){
+},{"./emitter":11,"./pure-node":23,"./utils":25}],9:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var utils = require('./utils'),
@@ -850,7 +1187,7 @@ function notifyUpstreams(space, type, path, value, index) {
 
 module.exports = Context;
 
-},{"./async":4,"./env":9,"./utils":17}],7:[function(require,module,exports){
+},{"./async":7,"./env":12,"./utils":25}],10:[function(require,module,exports){
 var Template = require('./template'),
 	api = require('./api'),
 	Context = require('./context');
@@ -920,7 +1257,7 @@ module.exports = function(apiName, tagName, defaultAttrMap, templ) {
 	return this;
 };
 
-},{"./api":3,"./context":6,"./template":16}],8:[function(require,module,exports){
+},{"./api":6,"./context":9,"./template":24}],11:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 /**
@@ -965,33 +1302,33 @@ Emitter.prototype = {
 };
 module.exports = Emitter;
 
-},{}],9:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 (function (global){
 var isServer = (typeof window === 'undefined') && (typeof document === 'undefined'),
 	Emitter = require('./emitter');
 var env = {
 	isServer: isServer,
 	debug: true,
-	api: {},
 	expressionsGlobal: isServer ? global : window,
 	factory: isServer ? null : document,
 	agora: new Emitter(),
-	clone: function(newAgora) {
+	clone: function(keepAgora) {
 		var cloned = {};
 		for (var i in this) {
-			if (i === agora && newAgora) {
+			if (i === 'agora' && !keepAgora) {
 				cloned.agora = new Emitter();
 				continue;
 			}
 			cloned[i] = this[i];
 		}
+		return cloned;
 	}
 };
 
 module.exports = env;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./emitter":8}],10:[function(require,module,exports){
+},{"./emitter":11}],13:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 function Filter(f) {
@@ -1056,7 +1393,7 @@ url_encode
 url_decode
  */
 
-},{}],11:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 var Filter = require('./filter'),
 	replacementRegExp = /true|false|null|\$\.(?:[a-zA-Z]\w*(?:\.\w*)*)|\$(?:[a-zA-Z]\w*(?:\.\w*)*)\(?|"[^"]*"|'[^']*'|[a-zA-Z_]\w*(?:\.\w*)*\(?/g,
@@ -1296,7 +1633,7 @@ module.exports = {
 	Interpolable: Interpolable
 };
 
-},{"./filter":10}],12:[function(require,module,exports){
+},{"./filter":13}],15:[function(require,module,exports){
 var utils = require('../utils'),
 	PureNode = require('../pure-node'),
 	Container = require('../container'),
@@ -1736,7 +2073,617 @@ View.prototype.call = function(node, context) {
 
 module.exports = engine;
 
-},{"../container":5,"../context":6,"../pure-node":15,"../template":16,"../utils":17,"../view":18}],13:[function(require,module,exports){
+},{"../container":8,"../context":9,"../pure-node":23,"../template":24,"../utils":25,"../view":26}],16:[function(require,module,exports){
+var utils = require('../utils'),
+	openTags = require('../parsers/open-tags'),
+	strictTags = /span|script|meta/,
+	Context = require('../context'),
+	Template = require('../template'),
+	View = require('../view');
+
+// String Output Descriptor
+function SOD() {
+	this.attributes = '';
+	this.classes = '';
+	this.children = '';
+	this.style = '';
+}
+
+function tagOutput(descriptor, innerDescriptor, name) {
+	var out = '<' + name + innerDescriptor.attributes;
+	if (innerDescriptor.style)
+		out += ' style="' + innerDescriptor.style + '"';
+	if (innerDescriptor.classes)
+		out += ' class="' + innerDescriptor.classes + '"';
+	if (innerDescriptor.children)
+		descriptor.children += out + '>' + innerDescriptor.children + '</' + name + '>';
+	else if (openTags.test(name))
+		descriptor.children += out + '>';
+	else if (strictTags.test(name))
+		descriptor.children += out + '></' + name + '>';
+	else
+		descriptor.children += out + '/>';
+}
+utils.tagOutput = tagOutput;
+
+var methods = {
+	SOD: SOD,
+	//_________________________________ local context management
+	context: function(context, descriptor, args) {
+		var data = args[0],
+			parent = args[1] || context,
+			path = args[2];
+		descriptor.context = new Context(data, parent, path);
+	},
+	//_________________________________________ EACH
+	each: function(context, descriptor, args) {
+		var path = args[0],
+			values = (typeof path === 'string') ? context.get(path) : path;
+		if (values && values.length) {
+			var template = args[1];
+			for (var i = 0, len = values.length; i < len; ++i)
+				template.toHTMLString(new Context(values[i], context), descriptor);
+		} else if (args[2])
+			args[2].toHTMLString(context, descriptor);
+	},
+	// ____________________________________ WITH
+	with: function(context, descriptor, args) {
+		var path = args[0],
+			template = args[1];
+		var ctx = new Context(typeof path === 'string' ? context.get(path) : path, context, path);
+		template.toHTMLString(ctx, descriptor, container);
+	},
+	//______________________________________________
+	if: function(context, descriptor, args) {
+		var ok, condition = args[0],
+			successTempl = args[1],
+			failTempl = args[2];
+		if (condition && condition.__interpolable__)
+			ok = condition.output(context);
+		else if (type === 'function')
+			ok = condition.call(this, context);
+		var sod = new SOD();
+		if (ok)
+			successTempl.toHTMLString(context, sod);
+		else if (failTempl)
+			failTempl.toHTMLString(context, sod);
+		if (sod.children)
+			descriptor.children += sod.children;
+	},
+	switch: function(context, descriptor, args) {
+		var xpr = args[0],
+			dico = args[1],
+			value = xpr.output(context),
+			templ = dico[value] || dico['default'];
+		if (templ) {
+			var sod = new SOD();
+			templ.toHTMLString(context, sod);
+			if (sod.children)
+				descriptor.children += sod.children;
+		}
+	},
+	//________________________________ TAGS
+	tag: function(context, descriptor, originalArgs) {
+		var name = originalArgs[0],
+			template = originalArgs[1];
+		var newDescriptor = new SOD();
+		template.toHTMLString(context, newDescriptor);
+		tagOutput(descriptor, newDescriptor, name);
+	},
+	text: function(context, descriptor, args) {
+		var value = args[0];
+		descriptor.children += value.__interpolable__ ? value.output(context) : value;
+	},
+	br: function(context, descriptor) {
+		descriptor.children += '<br>';
+	},
+	//______________________________________________ ATTRIBUTES
+	attr: function(context, descriptor, args) {
+		var name = args[0],
+			value = args[1];
+		descriptor.attributes += ' ' + name;
+		if (value)
+			descriptor.attributes += '="' + (value.__interpolable__ ? value.output(context) : value) + '"';
+	},
+	disabled: function(context, descriptor, args) {
+		var value = args[0];
+		if (value === undefined || context.get(value))
+			descriptor.attributes += ' disabled';
+	},
+	val: function(context, descriptor, args) {
+		var path = args[0],
+			value = args[1];
+		descriptor.attributes += ' value="' + (value.__interpolable__ ? value.output(context) : value) + '"';
+	},
+	setClass: function(context, descriptor, args) {
+		var name = args[0],
+			flag = args[1];
+		if ((flag.__interpolable__ && flag.output(context)) || flag)
+			descriptor.classes += ' ' + (name.__interpolable__ ? name.output(context) : name);
+	},
+	css: function(context, descriptor, args) {
+		var prop = args[0],
+			value = args[1];
+		descriptor.style += prop + ':' + (value.__interpolable__ ? value.output(context) : value);
+	},
+	visible: function(context, descriptor, args) {
+		var flag = args[0],
+			val = flag.__interpolable__ ? flag.output(context) : flag;
+		if (!val)
+			descriptor.style += 'display:none;';
+	},
+	//_________________________________ EVENTS
+	on: function() {},
+	off: function() {},
+	//_________________________________ CLIENT/SERVER
+	client: function(context, descriptor, args) {
+		if (context.env.data.isServer)
+			return;
+		args[0].toHTMLString(context, descriptor);
+	},
+	server: function(context, descriptor, args) {
+		if (!context.env.data.isServer)
+			return;
+		args[0].toHTMLString(context, descriptor);
+	},
+	//_______________________________ SUSPEND RENDER
+	suspendUntil: function(context, descriptor, args) {
+		var xpr = args[0],
+			index = args[1],
+			templ = args[2],
+			val = xpr.__interpolable__ ? xpr.output(context) : xpr,
+			rest = new Template(templ._queue.slice(index));
+		if (val)
+			rest.toHTMLString(context, descriptor);
+	}
+};
+
+View.prototype.toHTMLString = function(context, descriptor) {
+	var sod = new SOD();
+	Template.prototype.toHTMLString.call(this, context, sod);
+	descriptor.children += sod.children;
+	return descriptor.children;
+};
+Template.prototype.toHTMLString = function(context, descriptor) {
+	context = context || new Context();
+	descriptor = descriptor ||  new SOD();
+	var handler = this._queue[0],
+		nextIndex = 0,
+		f;
+	while (handler) {
+		if (handler.engineBlock)
+			f = handler.engineBlock.string;
+		else
+			f = handler.func || methods[handler.name];
+		f(descriptor.context || context, descriptor, handler.args);
+		handler = this._queue[++nextIndex];
+	}
+	return descriptor.children;
+};
+
+module.exports = methods;
+
+},{"../context":9,"../parsers/open-tags":20,"../template":24,"../utils":25,"../view":26}],17:[function(require,module,exports){
+var utils = require('../utils'),
+	Template = require('../template'),
+	Context = require('../context'),
+	stringEngine = require('./string'),
+	SOD = stringEngine.SOD,
+	View = require('../view');
+
+var firstMethods = {
+	//_________________________________ local context management
+	context: function(context, args) {
+		var data = args[0],
+			parent = args[1] || context,
+			path = args[2],
+			ctx = new Context(data, parent, path);
+		(context.children = context.children || []).push(ctx);
+		return ctx;
+	},
+	// ____________________________________ WITH
+	with: function(context, descriptor, args) {
+		var path = args[0],
+			// produce local context and store it in parent 
+			ctx = new Context(typeof path === 'string' ? context.get(path) : path, context, path);
+		(context.children = context.children || []).push(ctx);
+	},
+	//________________________________ Conditonal node rendering
+	if: function(context, args) {
+		var ok, condition = args[0],
+			successTempl = args[1],
+			failTempl = args[2];
+		var exec = function(ok, type, path) {
+			if (ok)
+				firstPass(successTempl, context);
+			else if (failTempl)
+				firstPass(failTempl, context);
+		};
+		if (condition && condition.__interpolable__) {
+			ok = condition.output(context);
+			condition.subscribeTo(context, exec);
+		} else if (typeof condition === 'function')
+			ok = condition.call(this, context);
+		exec(ok, 'set');
+	},
+	//_________________________________________ EACH
+	each: function(context, args) {
+		var path = args[0],
+			template = args[1],
+			emptyTemplate = args[2],
+			emptyInitialised = false,
+			data = path,
+			contexts = [];
+
+		var updateArray = function(value, type, path, index) {
+			// on array update : produce or maintain associated local contexts array
+			var ctx, ctxs = contexts;
+			switch (type) {
+				case 'reset':
+				case 'set':
+
+					if (!value.length && !emptyInitialised)
+						firstPass(emptyTemplate, context); // traverse empty template with firstPass
+
+					var j = 0;
+					for (var len = value.length; j < len; ++j) // reset existing or create new ctx 
+					{
+						if (ctxs[j]) // reset existing
+							ctxs[j].reset(value[j]);
+						else { // create new ctx
+							ctx = new Context(value[j], context);
+							ctxs.push(ctx);
+							firstPass(template, ctx); // traverse child template with firstPass
+						}
+					}
+					if (j < ctxs.length) // remove additional ctx that is not used any more
+					{
+						for (var i = j, len = ctxs.length; i < len; ++i)
+							ctxs[i].destroy();
+						ctxs.splice(j);
+					}
+					break;
+				case 'removeAt':
+					ctxs.splice(index, 1);
+					break;
+				case 'push':
+					ctx = new Context(value, context)
+					ctxs.push(ctx);
+					firstPass(template, ctx);
+					break;
+			}
+		};
+
+		if (typeof path === 'string') {
+			context.subscribe(path, updateArray);
+			context.subscribe(path + '.*', function(value, type, path, key) {
+				// on array's item update
+				var ctx = contexts[key];
+				if (ctx)
+					return ctx.reset(value); // update associated context
+			});
+			data = context.get(path);
+		}
+		if (data)
+			updateArray(data, 'set');
+		// store local contexts array in parent
+		(context.children = context.children || []).push(contexts);
+	},
+	//________________________________ TAGS
+	tag: function(context, args) {
+		var name = args[0],
+			template = args[1];
+		if (template)
+			firstPass(template, context); // traverse tag template with frstPass
+	},
+	//_________________________________ CLIENT/SERVER
+	client: function(context, args) {
+		if (context.env.data.isServer)
+			return;
+		firstPass(args[0], context); // traverse client template with frstPass
+	},
+	server: function(context, args) {
+		if (!context.env.data.isServer)
+			return;
+		firstPass(args[0], context); // traverse server template with frstPass
+	}
+};
+
+var secondMethods = {
+	//_________________________________ local context management
+	context: function(context, descriptor) {
+		if (context.children) // catch context produced in firstPass
+			descriptor.context = context.children.shift();
+	},
+	// ____________________________________ WITH
+	with: function(context, descriptor, args) {
+		if (!context.children)
+			return;
+		var path = args[0],
+			template = args[1],
+			ctx = context.children.shift(); // catch context produced in firstPass
+		secondPass(template, ctx, descriptor);
+	},
+	//_________________________________________ EACH
+	each: function(context, descriptor, args) {
+		if (!context.children)
+			return;
+		var contexts = context.children.shift(); // catch contexts array produced in firstPass
+		if (contexts && contexts.length) {
+			var template = args[1],
+				emptyTemplate = args[2];
+			if (!contexts.length)
+				secondPass(emptyTemplate, context, descriptor);
+			else
+				for (var i = 0, len = contexts.length; i < len; ++i)
+					secondPass(template, contexts[i], descriptor);
+		}
+	},
+	//________________________________ TAGS
+	tag: function(context, descriptor, args) {
+		var name = args[0],
+			template = args[1],
+			newDescriptor = new SOD();
+		if (template)
+			secondPass(template, context, newDescriptor);
+		utils.tagOutput(descriptor, newDescriptor, name);
+	},
+	//________________________________ Conditonal node rendering
+	if: function(context, descriptor, args) {
+		var ok, condition = args[0],
+			successTempl = args[1],
+			failTempl = args[2];
+		if (condition && condition.__interpolable__)
+			ok = condition.output(context);
+		else if (type === 'function')
+			ok = condition.call(this, context);
+		if (ok)
+			secondPass(successTempl, context, descriptor);
+		else if (failTempl)
+			secondPass(failTempl, context, descriptor);
+	},
+	//_________________________________ CLIENT/SERVER
+	client: function(context, descriptor, args) {
+		if (context.env.data.isServer)
+			return;
+		secondPass(args[0], context, descriptor);
+	},
+	server: function(context, descriptor, args) {
+		if (!context.env.data.isServer)
+			return;
+		secondPass(args[0], context, descriptor);
+	},
+	contentSwitch: null,
+	cssSwitch: null
+};
+
+function secondPass(template, context, descriptor) {
+	// apply string rendering only
+	descriptor = descriptor ||  new SOD();
+	var handler,
+		f;
+	for (var i = 0, len = template._queue.length; i < len; ++i) {
+		handler = template._queue[i];
+		if (handler.engineBlock)
+			f = handler.engineBlock.twopass.second || handler.engineBlock.string;
+		else if (handler.func) {
+			if (handler.firstPass)
+				continue;
+			else
+				f = handler.func;
+		} else if (secondMethods[handler.name])
+			f = secondMethods[handler.name];
+		else
+			f = stringEngine[handler.name];
+
+		f(descriptor.context || context, descriptor, handler.args);
+	}
+}
+
+function firstPass(template, context) {
+	// apply contexts construction only
+	var handler,
+		f,
+		newContext,
+		ctx;
+	for (var i = 0, len = template._queue.length; i < len; ++i) {
+		handler = template._queue[i];
+		if (handler.engineBlock) {
+			f = handler.engineBlock.twopass.first;
+			if (!f)
+				continue;
+		} else if (handler.func) {
+			if (!handler.firstPass)
+				continue;
+			else
+				f = handler.func;
+		} else if (!firstMethods[handler.name])
+			continue;
+		else
+			f = firstMethods[handler.name];
+		ctx = f(newContext || context, handler.args);
+		if (ctx && ctx.__yContext__)
+			newContext = ctx;
+	}
+}
+
+Template.prototype.twopass = View.prototype.twopass = function(context) {
+	context = context || new Context();
+	firstPass(this, context); // apply first pass : construct contexts
+	var self = this;
+	// wait for context stabilisation
+	return context.stabilised().then(function(context) {
+		// then apply second pass : render to string
+		var descriptor = new SOD();
+		secondPass(self, context, descriptor);
+		return descriptor.children;
+	});
+};
+
+module.exports = {
+	firstMethods: firstMethods,
+	secondMethods: secondMethods,
+	firstPass: firstPass,
+	secondPass: secondPass
+};
+
+},{"../context":9,"../template":24,"../utils":25,"../view":26,"./string":16}],18:[function(require,module,exports){
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
+
+var elenpi = require('elenpi'),
+	r = elenpi.r,
+	Parser = elenpi.Parser,
+	Template = require('../template'),
+	expression = require('./string-to-template');
+
+var rules = {
+	// HTML 5 common rules
+	// html5 unstrict self closing tags : 
+	openTags: require('./open-tags'),
+
+	document: r()
+		.zeroOrMore(null, r().space().rule('comment'))
+		.regExp(/^\s*<!DOCTYPE[^>]*>\s*/i, true)
+		.rule('children')
+		.space(),
+
+	comment: r().regExp(/^<!--(?:.|\n|\r)*?(?=-->)-->/),
+
+	tagEnd: r()
+		// closing tag
+		.regExp(/^\s*<\/([\w-_]+)\s*>/, false, function(descriptor, cap) {
+			if (descriptor.tagName !== cap[1].toLowerCase())
+				throw new Error('tag badly closed : ' + cap[1] + ' - (at opening : ' + descriptor.tagName + ')');
+		}),
+
+	innerScript: r()
+		.done(function(string, descriptor) {
+			var index = string.indexOf('</script>');
+			if (index === -1)
+				throw new Error('script tag badly closed.');
+			if (index)
+				descriptor.scriptContent = string.substring(0, index);
+			return string.substring(index + 9);
+		}),
+	// END common rules
+
+	// tag children
+	children: r()
+		.zeroOrMore(null,
+			r().oneOf([
+				r().space().rule('comment').skip(),
+				r().space().rule('tag'),
+				r().rule('text')
+			])
+		),
+
+	text: r().regExp(/^[^<]+/, false, function(descriptor, cap) {
+		descriptor.text(cap[0]);
+	}),
+
+	tag: r()
+		// 
+		.regExp(/^<([\w-_]+)\s*/, false, function(descriptor, cap) {
+			descriptor.tagName = cap[1].toLowerCase();
+		})
+		// 	.done(function(string, descriptor) {
+		// 		switch (descriptor.tagName) {
+		// 			case 'if': // <if {{  }}>  attr:   {{ xpr }}
+		// 				break;
+		// 			case 'each':
+		// 				break;
+		// 			case 'with':
+		// 				break;
+		// 			case 'client':
+		// 				break;
+		// 			case 'server':
+		// 				break;
+		// 			default:
+		// 				// test custom tags
+
+	// 				// else : normal tag
+	// 		}
+	// 	}),
+
+	// normalTag: r()
+		.done(function(string, descriptor) {
+			descriptor._attributesTemplate = new Template();
+			return this.exec(string, descriptor._attributesTemplate, this.rules.attributes);
+		})
+		.oneOf([
+			r().char('>')
+			.done(function(string, descriptor) {
+				// check html5 unstrict self-closing tags
+				if (this.rules.openTags.test(descriptor.tagName))
+					return string; // no children
+
+				if (descriptor.tagName === 'script') // get script content
+					return this.exec(string, descriptor, this.rules.innerScript);
+
+				// get inner tag content
+				descriptor._innerTemplate = new Template();
+				var ok = this.exec(string, descriptor._innerTemplate, this.rules.children);
+				if (ok === false)
+					return false;
+				// close tag
+				return this.exec(ok, descriptor, this.rules.tagEnd);
+			}),
+			// strict self closed tag
+			r().regExp(/^\/>/)
+		])
+		.done(function(string, descriptor) {
+			var innerTemplate = descriptor._innerTemplate,
+				attributesTemplate = descriptor._attributesTemplate;
+			if (innerTemplate)
+				attributesTemplate._queue = attributesTemplate._queue.concat(innerTemplate._queue);
+			descriptor.tag(descriptor.tagName, attributesTemplate);
+			descriptor._attributesTemplate = null;
+			descriptor._innerTemplate = null;
+			descriptor.tagName = null;
+			return string;
+		}),
+
+	attributes: r().zeroOrMore(null,
+		// attrName | attrName="... ..." | attrName=something
+		r().regExp(/^([\w-_]+)\s*(?:=(?:"([^"]*)"|([\w-_]+)))?\s*/, false, function(descriptor, cap) {
+			var attrName = cap[1],
+				value = (cap[2] !== undefined) ? cap[2] : ((cap[3] !== undefined) ? cap[3] : '');
+
+			switch (attrName) {
+				case 'class':
+					if (!value)
+						break;
+					value.split(/\s+/).forEach(function(cl) {
+						descriptor.setClass(cl);
+					});
+					break;
+				case 'data-template':
+					if (!value)
+						break;
+					var template = expression.parseTemplate(value);
+					if (template !== false)
+						descriptor._queue = descriptor._queue.concat(template._queue);
+					else
+						throw new Error('data-template attribute parsing failed : ' + value);
+					break;
+					// case 'style':
+				default:
+					descriptor.attr(attrName, value);
+					break;
+			}
+		})
+	)
+};
+
+var parser = new Parser(rules, 'children');
+
+parser.createDescriptor = function() {
+	return new Template();
+};
+
+module.exports = parser;
+
+},{"../template":24,"./open-tags":20,"./string-to-template":22,"elenpi":1}],19:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 var elenpi = require('elenpi'),
@@ -1801,7 +2748,10 @@ parser.parseListener = function(string) {
 
 module.exports = parser;
 
-},{"./primitive-argument-rules":14,"elenpi":1}],14:[function(require,module,exports){
+},{"./primitive-argument-rules":21,"elenpi":1}],20:[function(require,module,exports){
+module.exports = /(br|input|img|area|base|col|command|embed|hr|img|input|keygen|link|meta|param|source|track|wbr)/;
+
+},{}],21:[function(require,module,exports){
 var r = require('elenpi').r;
 
 var rules = {
@@ -1824,7 +2774,86 @@ var rules = {
 
 module.exports = rules;
 
-},{"elenpi":1}],15:[function(require,module,exports){
+},{"elenpi":1}],22:[function(require,module,exports){
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
+
+var elenpi = require('elenpi'),
+	r = elenpi.r,
+	Parser = elenpi.Parser,
+	Template = require('../template'),
+	primitiveArguments = require('./primitive-argument-rules');
+
+var rules = {
+	//_____________________________________
+	// click('addUser').div(p().h(1,'hello'))
+	templates: r()
+		.space()
+		.zeroOrMore('calls',
+			r().rule('template'),
+			r().regExp(/^\s*\.\s*/)
+		)
+		.done(function(string, descriptor) {
+			var t;
+			if (descriptor.calls)
+				t = compile(descriptor.calls);
+			if (t && descriptor.arguments) {
+				descriptor.arguments.push(t);
+				delete descriptor.calls;
+			} else
+				descriptor.calls = t;
+			return string;
+		}),
+
+	template: r()
+		.regExp(/^[\w-_]+/, false, function(descriptor, cap) {
+			descriptor.method = cap[0];
+			descriptor.arguments = [];
+		})
+		.zeroOrOne(null,
+			r()
+			.regExp(/^\s*\(\s*/)
+			.zeroOrMore(null,
+				r().oneOf(['integer', 'float', 'bool', 'singlestring', 'doublestring', 'templates']),
+				r().regExp(/^\s*,\s*/)
+			)
+			.regExp(/^\s*\)/)
+		)
+};
+
+for (var i in primitiveArguments)
+	rules[i] = primitiveArguments[i];
+
+var parser = new Parser(rules, 'templates');
+
+function compile(calls) {
+	var ch = new Template();
+	for (var i = 0, len = calls.length; i < len; ++i) {
+		var call = calls[i];
+		if (!ch[call.method])
+			throw new Error('no handler found in Template as : ' + call.method);
+		ch[call.method].apply(ch, call.arguments);
+	}
+	return ch;
+}
+
+var templateCache = {};
+
+parser.parseTemplate = function(string) {
+	if (templateCache[string] !== undefined)
+		return templateCache[string].calls;
+	var result = templateCache[string] = parser.parse(string);
+	if (result === false)
+		return false;
+	return result.calls;
+};
+
+module.exports = parser;
+
+/*
+console.log(y.expression.parseTemplate("click ( '12', 14, true, p(2, 4, span( false).p())). div(12345)"));
+ */
+
+},{"../template":24,"./primitive-argument-rules":21,"elenpi":1}],23:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 /**
  * Pure Virtual Node
@@ -1879,7 +2908,7 @@ PureNode.prototype  = {
 
 module.exports = PureNode;
 
-},{}],16:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 "use strict";
 
@@ -2219,7 +3248,7 @@ Template.prototype.cl = Template.prototype.setClass;
 
 module.exports = Template;
 
-},{"./api":3,"./context":6,"./interpolable":11,"./parsers/listener-call":13,"./utils":17}],17:[function(require,module,exports){
+},{"./api":6,"./context":9,"./interpolable":14,"./parsers/listener-call":19,"./utils":25}],25:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 //__________________________________________________________ UTILS
 
@@ -2474,7 +3503,7 @@ var utils = module.exports = {
 	}
 };
 
-},{}],18:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 var Template = require('./template');
 
 function View(data, parent, path) {
@@ -2499,5 +3528,91 @@ View.prototype = new Template();
 
 module.exports = View;
 
-},{"./template":16}]},{},[2])(2)
+},{"./template":24}],27:[function(require,module,exports){
+/**  @author Gilles Coomans <gilles.coomans@gmail.com> */
+
+var utils = require('./utils'),
+	Emitter = require('./emitter'),
+	PureNode = require('./pure-node'),
+	openTags = require('./parsers/open-tags');
+
+//_______________________________________________________ VIRTUAL NODE
+
+/**
+ * Virtual Node
+ *
+ * A minimal mock of DOMElement. It gathers PureNode and Emitter API and add attributes management (add and remove).
+ * 
+ * @param {Object} option (optional) option object : { ?tagName:String, ?nodeValue:String } + options from PureNode
+ */
+function Virtual(tagName, nodeValue) {
+	PureNode.call(this);
+	this.__yVirtual__ = true;
+	this.tagName = tagName;
+	if (nodeValue)
+		this.nodeValue = nodeValue;
+};
+
+Virtual.prototype  = {
+	setAttribute: function(name, value) {
+		(this.attributes = this.attributes || {})[name] = value;
+	},
+	removeAttribute: function(name, value) {
+		if (!this.attributes)
+			return;
+		delete this.attributes[name];
+	},
+	addEventListener: Emitter.prototype.on,
+	removeEventListener: Emitter.prototype.off,
+	dispatchEvent: Emitter.prototype.emit
+};
+
+// apply inheritance
+utils.shallowMerge(PureNode.prototype, Virtual.prototype);
+
+/**
+ * Virtual to String output
+ * @return {String} the String representation of Virtual node
+ */
+Virtual.prototype.toString = function() {
+	if (this.tagName === 'textnode')
+		return this.nodeValue;
+	var node = '<' + this.tagName;
+	if (this.id)
+		node += ' id="' + this.id + '"';
+	for (var a in this.attributes)
+		node += ' ' + a + '="' + this.attributes[a] + '"';
+	if (this.classes) {
+		var classes = Object.keys(this.classes);
+		if (classes.length)
+			node += ' class="' + classes.join(' ') + '"';
+	}
+	if (this.childNodes && this.childNodes.length) {
+		node += '>';
+		for (var j = 0, len = this.childNodes.length; j < len; ++j)
+			node += this.childNodes[j].toString();
+		node += '</' + this.tagName + '>';
+	} else if (this.scriptContent)
+		node += '>' + this.scriptContent + '</script>';
+	else if (openTags.test(this.tagName))
+		node += '>';
+	else
+		node += ' />';
+	return node;
+};
+
+
+// Virtual Factory : mimic document.createElement but return a virtual node
+Virtual.createElement = function(tagName) {
+	return new Virtual(tagName);
+};
+
+// Virtual Factory : mimic document.createTextNode but return a virtual node
+Virtual.createTextNode = function(value) {
+	return new Virtual('textnode', value);
+};
+
+module.exports = Virtual;
+
+},{"./emitter":11,"./parsers/open-tags":20,"./pure-node":23,"./utils":25}]},{},[4])(4)
 });

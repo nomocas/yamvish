@@ -8,16 +8,15 @@
   },
   "scripts": {
     "test": "mocha",
-    "build": "npm run build:core && npm run build:full && gulp uglify",
-    "build:full": "browserify -s y index.js > dist/yamvish.js",
-    "build:core": "browserify -s y core.js > dist/yamvish.core.js",
-    "min:full": "uglifyjs dist/yamvish.js --compress --mangle  -o dist/yamvish.min.js",
-    "min:core": "uglifyjs dist/yamvish.core.js --compress --mangle  -o dist/yamvish.core.min.js",
+    "build:prod": "npm run build:core  && gulp uglify",
+    "build:core": "browserify -s y index.js > dist/yamvish.js",
+    "min": "uglifyjs dist/yamvish.js --compress --mangle  -o dist/yamvish.min.js",
     "serve": "live-server . --ignore=node_modules,lib",
     "watch": "watch 'browserify -s y index.js > dist/yamvish.js' ./lib",
-    "bump:patch": "npm run build && git add -A && git commit -m 'patch version' && git push && mversion patch -m && git push --tags && npm publish",
-    "bump:minor": "npm run build && git add -A && git commit -m 'patch version' && git push && mversion minor -m && git push --tags && npm publish",
-    "bump:major": "npm run build && git add -A && git commit -m 'patch version' && git push && mversion major -m && git push --tags && npm publish"
+    "watch:example": "watch 'browserify -s y example/main.js > example/bundle.js' ./lib",
+    "bump:patch": "npm run build:prod && git add -A && git commit -m 'patch version' && git push && mversion patch -m && git push --tags && npm publish && git push",
+    "bump:minor": "npm run build:prod && git add -A && git commit -m 'patch version' && git push && mversion minor -m && git push --tags && npm publish && git push",
+    "bump:major": "npm run build:prod && git add -A && git commit -m 'patch version' && git push && mversion major -m && git push --tags && npm publish && git push"
   },
   "repository": {
     "type": "git",

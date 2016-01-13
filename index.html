@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <title>yamvish tests</title>
-    <script type="text/javascript" src="./dist/yamvish.js"></script>
+    <script type="text/javascript" src="./example/bundle.js"></script>
 </head>
 
 <body>
@@ -19,6 +19,8 @@
         <button onclick="test.set100()">set 100</button>
         <button onclick="test.set200()">set 200</button>
         <button onclick="test.router()">router</button>
+        <button onclick="test.virtual()">virtual</button>
+        <button onclick="test.virtual2()">virtual2</button>
         <span id="res"></span>
     </div>
     <div id="app"></div>
@@ -232,38 +234,68 @@
                 // console.log('view1 matched : ', matched);
                 // this.toAgora('bloupi', 'view1 route matched : ', matched);
             })
-            //_______________________________
-            .br().br()
-            .text('loli - {{ reu }} - {{ testOutput(12) }} - {{ obj.test2(33) }}')
-            .p('lolooooo - {{ $env.language }}')
-            .br().br().br()
-            .text('route : {{ $route.route }}')
+
+        //_______________________________
+        // .br().br()
+        // .text('loli - {{ reu }} - {{ testOutput(12) }} - {{ obj.test2(33) }}')
+        .p('lolooooo - {{ $env.language }}')
+            // .br().br().br()
+            .text('route : {{ $route }}')
             .div(
                 y.view()
                 .route('./hisss', function(matched) {
                     // console.log('view2 matched : ', matched);
                 })
-                .p('route2 : {{ $route.route }}')
+                .div('biloudiii ?')
+                .p('route2 : {{ $route }}')
             )
             .div(
                 y.view()
-                .route('./huue', function(matched) {
+                .route('>/huue', function(matched) {
                     // console.log('view3 matched : ', matched);
                 })
-                .p('route3 : {{ $route.route }}')
+                .p('route3 : {{ $route }}')
                 .use(t)
             )
             .button('do test', y().click('myAction(12, bar)'))
             .button('do test2', y().click('myAction2'))
             .suspendUntil('{{ test }}')
-            .div('after suspension');
-
+            .div('after suspension')
+            .p('wdf 2');
 
 
         mainView.toContainer(rootContext).mount('#app');
     }
 
 
+    test.virtual = function() {
+        var env = y.env.clone(true);
+        env.factory = y.Virtual;
+        var ctx = new y.Context({}, null, null, env);
+        var time = new Date().getTime();
+
+        for (var i = 0; i < 100; ++i)
+        // console.log(
+            t.toContainer(ctx);
+
+        time = new Date().getTime() - time;
+        console.log('virtual 1 time : ', time);
+        document.getElementById('res').innerHTML = time;
+    }
+    test.virtual2 = function() {
+        var env = y.env.clone(true);
+        env.factory = y.Virtual;
+        var ctx = new y.Context({}, null, null, env);
+        var time = new Date().getTime();
+
+        for (var i = 0; i < 100; ++i)
+        // console.log(
+            t.toContainer(ctx).toString();
+
+        time = new Date().getTime() - time;
+        console.log('virtual 2 time : ', time);
+        document.getElementById('res').innerHTML = time;
+    }
 
     // string();
     // string2();
