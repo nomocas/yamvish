@@ -18,7 +18,7 @@ y.Interpolable = interpolable.Interpolable;
 y.addCustomTag = require('./lib/custom-tags');
 y.listenerParser = require('./lib/parsers/listener-call');
 y.elenpi = require('elenpi');
-
+y.api = require('./lib/api');
 require('./lib/output-engine/dom');
 
 y.View = require('./lib/view');
