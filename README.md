@@ -2,15 +2,26 @@
 
 Yet Another MVish isomorphic javascript library.
  
-Inspired from React, Ractive, jsblocks and Riot.
+Inspired from React, Ractive, jsblocks and Riot and years of works.
 
+It's there because, as lot of developers obviously, I love all the 451 MV* libs avaiable nowadays (and it stills growing every days...) with all their really great ideas and toon of works, but I was feeling that, as others, simplicity, peformance, completness, readability, reusability AND isomorphism are something that wasn't achieved yet.
+
+So this is the 452th... :)
+
+More seriously, as it would be fool to re-invent the wheel, yamvish try to solve, as primary goal, the big and really complex problem of isomorphism. The Real One.
+Not just the possibility to render both sides. That's easy and achieved since decade.
+Isomorphism means to write your __whole__ app once then run it both sides __simply__ and __smartly__ without rewriting more than few lines and without killing your server ;).
+
+So yamvish is :
 - really fast both sides.
-- no need of jquery/zepto or cheerio/jsdom (but you could if needed).
+- dont' need jquery/zepto or cheerio/jsdom (but you could if needed).
 - really small
-	- core : +- 8Ko minified/gzipped (28 Ko min).
-	- with parsers : 10(/36) Ko. 
-	- full with plugins : 19(/63) Ko)
+	- core : +- 11Ko minified/gzipped (36 Ko min).
+	- with parsers : 13 Ko. 
+	- full with plugins : 25 Ko.
 - dead simple. minimal learning curve.
+- absolutly straight forward. just context with data, powerful template and pure dom node handling. 
+- minimal obstrusivity. maximum plasticity.
 
 __Data binding__ (Ractive inspiration)
 - based on simple observable-data-map (of course with two-way)
@@ -23,15 +34,21 @@ __Fast Templating__ (Virtual and/or pure HTMLElement handeling)
 - allow full js expression and filtering
 - minimal HTML foot-print : a single attribute for everything ("data-template")
 - could output to DOMElement, to virtual nodes, or to String.
-- even if it's really fast in the browser with Virtual/DOMElements handling, rendering is much faster under nodejs when using string output.
+- even if it's really fast in the browser with Virtual/DOMElements handling, rendering is even faster under nodejs when using string output.
 - allow WebComponent style
 
 __Promise and Async awareness__
 - use and handle Promises when needed to manage asynchroneous timing
 - easy way to get end-of-actions events/promises (mounted, unmounted, destroyed, done)
 
+__Modularity with Event Programmation__
+- define a simple global agora object where to listen/push messages from modules and views
+
+__Concurrency Battle Ready__
+- use simple global env object pattern that allow safe server-side isolation and rendering
+
 __Plugins__
-Even if it's easily usable with other third party lib (routers, ressources/model managers, ...), it plays really nicely with those extensions that you could find in the plugins folder from sources :
+Even if it's easily usable with other third party lib (routers, ressources/model managers, any jquery plugin,...), it plays really nicely with those extensions that you could find in the plugins folder from sources :
 - yamvish router : dynamic-in-place routing made easy.
 - loader through [c3po](https://github.com/nomocas/c3po) : open pattern for ressources management wich provide clean way for handling transparently different ressources drivers from browser or server side. This allow real and __complete__ isomorphism.
 - [RQL](https://github.com/persvr/rql) array filtering, sorting and paging (and many more).
@@ -77,18 +94,16 @@ __More__
 
 	// define a context
 	var context = new y.Context({ 
-		data:{
-			title: 'Simpler is Better',
-			active: false,
-			user:'',
-			users: ["John", "Bill"],
-			articles: [{
-				title: 'Smaller is Better',
-				content:'lorem ipsum'
-			}],
-			addUser : function(event) {
-				this.push('users', this.get('user'));
-			}
+		title: 'Simpler is Better',
+		active: false,
+		user:'',
+		users: ["John", "Bill"],
+		articles: [{
+			title: 'Smaller is Better',
+			content:'lorem ipsum'
+		}],
+		addUser : function(event) {
+			this.push('users', this.get('user'));
 		}
 	});
   
@@ -140,18 +155,16 @@ Exactly the same example than above (but a really few detail... could you find i
 
 		// define a context
 		var context = new y.Context({ 
-			data:{
-				title: 'Simpler is Better',
-				active: false,
-				user: '',
-				users: ['John', 'Bill'],
-				articles: [{
-					title: 'Smaller is Better',
-					content:'lorem ipsum'
-				}],
-				addUser : function(event) {
-					this.push('users', this.get('user'));
-				}
+			title: 'Simpler is Better',
+			active: false,
+			user: '',
+			users: ['John', 'Bill'],
+			articles: [{
+				title: 'Smaller is Better',
+				content:'lorem ipsum'
+			}],
+			addUser : function(event) {
+				this.push('users', this.get('user'));
 			}
 		});
 
@@ -174,52 +187,48 @@ Exactly the same example than above (but a really few detail... could you find i
 ## View example
 
 Exactly the same example than above.
-(A View is simply a compilation of Context, Virtual and Template API)
+(A view is simply a template that will always be produced as a Container associated with its own context.)
 
 ```javascript
 
-var view = new y.View({
-	data: {
-		title: 'Simpler is Better',
-		active: false,
-		user: '',
-		users: ["John", "Bill"],
-		articles: [{
-			title: 'Smaller is Better',
-			content: 'lorem ipsum'
-		}],
-		addUser : function(event) {
-			this.push('users', this.get('user'));
-		}
+var view = y.view({
+	title: 'Simpler is Better',
+	active: false,
+	user: '',
+	users: ["John", "Bill"],
+	articles: [{
+		title: 'Smaller is Better',
+		content: 'lorem ipsum'
+	}],
+	addUser : function(event) {
+		this.push('users', this.get('user'));
 	}
-});
-
-
-view.h(1, '{{ title }}')
-	.input('text', '{{ user }}')
-	.button('add user', y().setClass('your-class', 'active').click('addUser'))
-	.div(
-		y().h(2, 'Users')
-		.ul(
-			y().each('users',
-				y().li(
-					y().a('#/user/{{ $this }}', '{{ $this }}')
-				)
+})
+.h(1, '{{ title }}')
+.input('text', '{{ user }}')
+.button('add user', y().setClass('your-class', 'active').click('addUser'))
+.div(
+	y().h(2, 'Users')
+	.ul(
+		y().each('users',
+			y().li(
+				y().a('#/user/{{ $this }}', '{{ $this }}')
 			)
 		)
 	)
-	.div(
-		y().h(2, 'Articles')
-		.each('articles',
-			y().h(3, '{{ title }}')
-			.p('{{ content }}')
-		)
-	);
+)
+.div(
+	y().h(2, 'Articles')
+	.each('articles',
+		y().h(3, '{{ title }}')
+		.p('{{ content }}')
+	)
+);
 
-view.mount(document.body);
+var viewContainer = view.toContainer().mount(document.body);
 
-// manipulate data from view. UI will update accordingly.
-view.set('active', true)
+// manipulate data from view's context. UI will update accordingly.
+viewContainer.context.set('active', true)
 	.set('users.1', 'William')
 	.push('users', 'Bob')
 	.push('articles', {
@@ -283,36 +292,55 @@ Templating chainable API
 	- inheritance and specialisation : up, bottom
 	- from plugins : route, load
 
+- y.PureNode
+Minimal mockup of virtual node (DOM Element minimal immitation) : 
+	- appendChild
+	- insertBefore
+
 Minimal mockup of standard (modern) DOM node : 
 - y.Virtual 		
 	- setAttribute
+	- removeAttribute
 	- addEventListener/removeEventListener
-	- appendChild
-	- classList.add, classList.remove
-	- toContainer()/toString()
+	- toString
 
 Observable data map that holds also event's handlers.
 - y.Context 		
-	- subscribe/unsubscribe
-	- get(path), set(path, value), push(path, value), del(path)
+	- get(path)
+	- set(path, value)
+	- push(path, value)
+	- del(path)
+	- toggle(path)
+	- toggleInArray(path, value)
+	- setAsync(path, value)
+	- pushAsync(path, value)
 	- reset(value)
+	- subscribe/unsubscribe
 	- notify/notifyAll
+	- onAgora/toAgora
 
 View : It's just there to provide easy structuration. Absolutly optional.
 - y.View
-	- compilation of Template + Virtual + Context API
-	- there is nothing that you could do with View that you couldn't do with other classes. 
-	- View is bundled with minimal John Resig Simple Class Inheritance 
+	- Template that produce container with own context
+	- there is some special thing that you could do with View that you couldn't do with other classes (as routing with yamvish-route). 
 
 ### Plugins
 
 #### Dynamic-in-place router
 
+[routedsl plugin](https://github.com/nomocas/yamvish-router)
 
+#### Load Data
 
-#### c3po bridge
+[c3po bridge](https://github.com/nomocas/yamvish-c3po)
 
+#### Date formating
 
+[date format filter](https://github.com/nomocas/yamvish-date-format)
+
+#### Model validation
+
+[aright plugin](https://github.com/nomocas/yamvish-aright)
 
 ### Misc
 
@@ -325,15 +353,11 @@ HTML to Template Parser :
 var template = y.html.parse('<ul data-template="each(\'users\').click(\'hello\')" class="foo"><li>{{ $this }}</li></ul><p>{{ title }}</p>');
 
 var context = new y.Context({
-  data:{
-    title: 'Simpler is Better',
-    users: ["John", "Bill"]
-  }, 
-  handlers:{
-    hello : function(event) {
-      console.log("click hello");
-    }
-  }
+	title: 'Simpler is Better',
+	users: ["John", "Bill"]
+	hello : function(event) {
+	  console.log("click hello");
+	}
 });
 
 var elem = document.createElement('section');
@@ -349,14 +373,10 @@ Template String parser :
 ```javascript
 var template = y.expression.parseTemplate("ul(each('users', li(text('{{ $this }}'))).click('hello'))");
 var context = new y.Context({
-  data:{
     users: ["John", "Bill"]
-  }, 
-  handlers:{
     hello : function(event) {
       console.log("click hello");
     }
-  }
 });
 
 var elem = document.createElement('section');
@@ -395,9 +415,7 @@ Modify context data by hand then notify.
 ```javascript
  	// define a context
 	var context = new y.Context({ 
-		data:{
-			users: ['John', 'Bill']
-		}
+		users: ['John', 'Bill']
 	});
 	context.data.users.push("jean");
   	context.notify('push', 'users', 'Jean', view.data.users.length -1);
