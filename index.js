@@ -25,7 +25,7 @@ y.View = require('./lib/view');
 y.view = function(data, parent, path) {
 	return new y.View(data, parent, path);
 };
-y.html = require('./lib/parsers/html-string-to-template');
+y.html = require('./lib/parsers/html-to-template');
 
 module.exports = y;
 
@@ -35,5 +35,4 @@ module.exports = y;
 
 	es6-promise or promis
 	history API if router 
-
  */
