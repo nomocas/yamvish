@@ -1,3 +1,19 @@
+
+/*
+
+.set('opts', {
+		myProp: '{{ hello world }}'
+	})
+	.bindMap('opts')
+	// or
+	.bindMapToParent('opts')
+*/
+
+
+
+
+
+
 Filter syntax : keep filters ? 		NO : todo : remove filters and find solution for placing them in globals
 
 
