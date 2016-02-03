@@ -27,6 +27,13 @@ y.view = function(data, parent, path) {
 };
 y.html = require('./lib/parsers/html-to-template');
 
+
+y.toAPI = function(apiName, methodsObj) {
+	var api = y.api[apiName] = y.api[apiName] || {};
+	y.utils.shallowMerge(methodsObj, api);
+	return api;
+};
+
 module.exports = y;
 
 
