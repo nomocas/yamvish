@@ -8,8 +8,8 @@
   },
   "scripts": {
     "test": "mocha",
-    "build:prod": "npm run build:core  && gulp uglify",
-    "build:core": "browserify -s y index.js > dist/yamvish.js",
+    "dist": "npm run build  && gulp uglify",
+    "build": "browserify -s y index.js > dist/yamvish.js",
     "min": "uglifyjs dist/yamvish.js --compress --mangle  -o dist/yamvish.min.js",
     "serve": "live-server . --ignore=node_modules,lib",
     "watch": "watch 'browserify -s y index.js > dist/yamvish.js' ./lib",
