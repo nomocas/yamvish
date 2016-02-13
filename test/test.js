@@ -2,10 +2,12 @@
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  *
  */
-if (typeof require !== 'undefined')
+if (typeof require !== 'undefined') {
 	var chai = require("chai"),
 		y = require("../index");
-
+	require('../lib/output-engine/string');
+	require('../lib/output-engine/twopass');
+}
 var expect = chai.expect;
 
 describe("context", function() {
