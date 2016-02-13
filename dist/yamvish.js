@@ -267,7 +267,7 @@ _dereq_('./lib/output-engine/dom/engine');
 
 module.exports = y;
 
-},{"./lib/api":3,"./lib/async":4,"./lib/context":5,"./lib/custom-tags":6,"./lib/env":8,"./lib/filter":9,"./lib/interpolable":10,"./lib/output-engine/dom/container":11,"./lib/output-engine/dom/engine":13,"./lib/parsers/html-to-template":17,"./lib/parsers/listener-call":18,"./lib/template":22,"./lib/utils":23,"./lib/view":24,"elenpi":1}],3:[function(_dereq_,module,exports){
+},{"./lib/api":3,"./lib/async":4,"./lib/context":5,"./lib/custom-tags":6,"./lib/env":8,"./lib/filter":9,"./lib/interpolable":10,"./lib/output-engine/dom/container":11,"./lib/output-engine/dom/engine":13,"./lib/parsers/html-to-template":15,"./lib/parsers/listener-call":16,"./lib/template":20,"./lib/utils":21,"./lib/view":22,"elenpi":1}],3:[function(_dereq_,module,exports){
 // simple global object where store apis
 module.exports = {};
 
@@ -362,7 +362,7 @@ utils.shallowMerge(Emitter.prototype, AsyncManager.prototype);
 
 module.exports = AsyncManager;
 
-},{"./emitter":7,"./utils":23}],5:[function(_dereq_,module,exports){
+},{"./emitter":7,"./utils":21}],5:[function(_dereq_,module,exports){
 /**  
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  * an observable data holder.
@@ -703,6 +703,7 @@ Context.prototype = {
 	}
 };
 
+// general env
 Context.env = new Context(env);
 delete Context.env.env;
 
@@ -724,7 +725,7 @@ function notifyUpstreams(space, type, path, value, index) {
 
 module.exports = Context;
 
-},{"./async":4,"./env":8,"./utils":23}],6:[function(_dereq_,module,exports){
+},{"./async":4,"./env":8,"./utils":21}],6:[function(_dereq_,module,exports){
 var Template = _dereq_('./template'),
 	api = _dereq_('./api'),
 	Context = _dereq_('./context');
@@ -748,7 +749,6 @@ Template.prototype.__yield = function() {
 		}
 	});
 };
-
 
 var customTags = {
 	dom: function(context, args) {
@@ -794,7 +794,7 @@ module.exports = function(apiName, tagName, defaultAttrMap, templ) {
 	return this;
 };
 
-},{"./api":3,"./context":5,"./template":22}],7:[function(_dereq_,module,exports){
+},{"./api":3,"./context":5,"./template":20}],7:[function(_dereq_,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 /**
@@ -1292,17 +1292,8 @@ var proto = {
 	},
 	destroy: function() {
 		this.emit('destroy', this);
-		if (this.binds) {
-			for (var i = 0, len = this.binds.length; i < len; i++)
-				this.binds[i]();
-			this.binds = null;
-		}
+		utils.destroyElement(this, true);
 		this.destroyed = true;
-		if (this.childNodes)
-			for (var i = 0; i < this.childNodes.length; i++)
-				utils.destroyElement(this.childNodes[i], true);
-		this.childNodes = null;
-		this.context = null;
 		this.comment = null;
 		this.parentNode = null;
 	},
@@ -1339,7 +1330,7 @@ utils.shallowMerge(proto, Container.prototype);
 
 module.exports = Container;
 
-},{"../../emitter":7,"../../utils":23}],12:[function(_dereq_,module,exports){
+},{"../../emitter":7,"../../utils":21}],12:[function(_dereq_,module,exports){
 /**  
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  */
@@ -1475,7 +1466,7 @@ module.exports = {
 	each: each
 };
 
-},{"../../context":5,"../../utils":23,"./container":11,"./switcher":16}],13:[function(_dereq_,module,exports){
+},{"../../context":5,"../../utils":21,"./container":11,"./switcher":14}],13:[function(_dereq_,module,exports){
 /**  
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  */
@@ -1483,13 +1474,40 @@ var utils = _dereq_('../../utils'),
 	Container = _dereq_('./container'),
 	Context = _dereq_('../../context'),
 	Template = _dereq_('../../template'),
+	Switcher = _dereq_('./switcher'),
 	View = _dereq_('../../view');
 
 var engine = {
 	//___________________________________ Structure Flow
 	each: _dereq_('./each').each,
-	if: _dereq_('./if'),
-	switch: _dereq_('./switch'),
+	if: function(context, node, args) {
+		var condition = args[0];
+		var templates = [{
+			value: true,
+			template: args[1]
+		}];
+		if (args[2])
+			templates.push({
+				value: false,
+				template: args[2]
+			});
+		var sw = new Switcher(context, node, templates);
+		sw.expression(condition);
+	},
+	switch: function(context, node, args) {
+		var expression = args[0],
+			map = args[1],
+			templates = [];
+
+		for (var i in map)
+			if (i !== 'default')
+				templates.push({
+					value: i,
+					template: map[i]
+				});
+		var sw = new Switcher(context, node, templates, map['default']);
+		sw.expression(expression);
+	},
 	//_________________________________ local context management
 	newContext: function(context, node, args) {
 		var data = args[0],
@@ -1630,10 +1648,7 @@ var engine = {
 			val = flag.output(context);
 			node.binds = node.binds || [];
 			flag.subscribeTo(context, function(value, type, path) {
-				if (node.__yContainer__)
-					value ? node.show() : node.hide();
-				else
-					node.style.display = value ? initial : 'none';
+				value ? utils.show(node) : utils.hide(node);
 			}, node.binds);
 		}
 		if (node.__yContainer__)
@@ -1720,63 +1735,19 @@ Template.prototype.call = function(node, context) {
 	_execQueue(node, this._queue, context);
 };
 
+View.prototype.call = function(node, context) {
+	this.toContainer(context).appendTo(node);
+};
+
 Template.prototype.toContainer = View.prototype.toContainer = function(context) {
 	var container = new Container();
 	_execQueue(container, this._queue, context);
 	return container;
 };
 
-View.prototype.call = function(node, context) {
-	this.toContainer(context).appendTo(node);
-};
-
 module.exports = engine;
 
-},{"../../context":5,"../../template":22,"../../utils":23,"../../view":24,"./container":11,"./each":12,"./if":14,"./switch":15}],14:[function(_dereq_,module,exports){
-/**  
- * @author Gilles Coomans <gilles.coomans@gmail.com>
- */
-var utils = _dereq_('../../utils'),
-	Switcher = _dereq_('./switcher');
-
-module.exports = function(context, node, args) {
-	var condition = args[0];
-	var templates = [{
-		value: true,
-		template: args[1]
-	}];
-	if (args[2])
-		templates.push({
-			value: false,
-			template: args[2]
-		});
-	var sw = new Switcher(context, node, templates);
-	sw.expression(condition);
-};
-
-},{"../../utils":23,"./switcher":16}],15:[function(_dereq_,module,exports){
-/**  
- * @author Gilles Coomans <gilles.coomans@gmail.com>
- */
-var utils = _dereq_('../../utils'),
-	Switcher = _dereq_('./switcher');
-
-module.exports = function(context, node, args) {
-	var expression = args[0],
-		map = args[1],
-		templates = [];
-
-	for (var i in map)
-		if (i !== 'default')
-			templates.push({
-				value: i,
-				template: map[i]
-			});
-	var sw = new Switcher(context, node, templates, map['default']);
-	sw.expression(expression);
-};
-
-},{"../../utils":23,"./switcher":16}],16:[function(_dereq_,module,exports){
+},{"../../context":5,"../../template":20,"../../utils":21,"../../view":22,"./container":11,"./each":12,"./switcher":14}],14:[function(_dereq_,module,exports){
 /**  
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  * Switcher : inner class that hold bunch of templates associated with a value.
@@ -1857,7 +1828,7 @@ Switcher.prototype = {
 
 module.exports = Switcher;
 
-},{"../../interpolable":10,"../../utils":23}],17:[function(_dereq_,module,exports){
+},{"../../interpolable":10,"../../utils":21}],15:[function(_dereq_,module,exports){
 /** 
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  * for parsing yamvish html5-like template
@@ -2111,7 +2082,7 @@ res
 
  */
 
-},{"../api":3,"../template":22,"./open-tags":19,"./string-to-template":21,"elenpi":1}],18:[function(_dereq_,module,exports){
+},{"../api":3,"../template":20,"./open-tags":17,"./string-to-template":19,"elenpi":1}],16:[function(_dereq_,module,exports){
 /** 
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  * for parsing listener attribute : e.g. .click('foo(bar, 12)')
@@ -2179,14 +2150,14 @@ parser.parseListener = function(string) {
 
 module.exports = parser;
 
-},{"./primitive-argument-rules":20,"elenpi":1}],19:[function(_dereq_,module,exports){
+},{"./primitive-argument-rules":18,"elenpi":1}],17:[function(_dereq_,module,exports){
 /**
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  * all tags that could be used without closing sequence (aka <br>)
  */
 module.exports = /(br|input|img|area|base|col|command|embed|hr|img|input|keygen|link|meta|param|source|track|wbr)/;
 
-},{}],20:[function(_dereq_,module,exports){
+},{}],18:[function(_dereq_,module,exports){
 /**
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  * elenpi rules for primitives function's arguments. aka : "double", 'single', 1.12, 14, true, false
@@ -2213,7 +2184,7 @@ var rules = {
 
 module.exports = rules;
 
-},{"elenpi":1}],21:[function(_dereq_,module,exports){
+},{"elenpi":1}],19:[function(_dereq_,module,exports){
 /**  
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  * for parsing data-template attributes
@@ -2295,7 +2266,7 @@ module.exports = parser;
 console.log(y.expression.parseTemplate("click ( '12', 14, true, p(2, 4, span( false).p())). div(12345)"));
  */
 
-},{"../template":22,"./primitive-argument-rules":20,"elenpi":1}],22:[function(_dereq_,module,exports){
+},{"../template":20,"./primitive-argument-rules":18,"elenpi":1}],20:[function(_dereq_,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 "use strict";
 
@@ -2687,7 +2658,7 @@ Template.prototype.cl = Template.prototype.setClass;
 
 module.exports = Template;
 
-},{"./api":3,"./context":5,"./interpolable":10,"./parsers/listener-call":18,"./utils":23}],23:[function(_dereq_,module,exports){
+},{"./api":3,"./context":5,"./interpolable":10,"./parsers/listener-call":16,"./utils":21}],21:[function(_dereq_,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 //________________________________ Properties management with dot syntax
 
@@ -2742,19 +2713,23 @@ function emptyNode(node) {
 }
 
 function destroyElement(node, removeFromParent) {
-	if (node.context)
+	if (node.context) {
 		node.context.destroy();
-
-	if (removeFromParent && node.parentNode) {
-		node.parentNode.removeChild(node);
-		node.parentNode = null;
+		node.context = null;
 	}
-	if (node.__yPureNode__) {
+
+	if (node.__yContainer__) {
 		if (node.childNodes && node.childNodes.length)
 			destroyChildren(node, removeFromParent);
-	} else if (node.childNodes && node.childNodes.length)
-		destroyChildren(node);
-
+	} else {
+		if (removeFromParent && node.parentNode) {
+			node.parentNode.removeChild(node);
+			node.parentNode = null;
+		}
+		if (node.childNodes && node.childNodes.length)
+			destroyChildren(node);
+	}
+	node.childNodes = null;
 	if (node.binds) {
 		for (var i = 0, len = node.binds.length; i < len; i++)
 			node.binds[i]();
@@ -2782,17 +2757,15 @@ var utils = module.exports = {
 	hide: function(node) {
 		if (node.__yContainer__)
 			return node.hide();
-		if (!node.style)
-			node.style = {};
-		node.style.display = 'none';
+		if (node.style)
+			node.style.display = 'none';
 		return node;
 	},
 	show: function(node) {
 		if (node.__yContainer__)
 			return node.show();
-		if (!node.style)
-			node.style = {};
-		node.style.display = '';
+		if (node.style)
+			node.style.display = '';
 		return node;
 	},
 	shallowMerge: function(src, target) {
@@ -2856,7 +2829,7 @@ var utils = module.exports = {
 	}
 };
 
-},{}],24:[function(_dereq_,module,exports){
+},{}],22:[function(_dereq_,module,exports){
 /**  
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  * View means something special in yamvish. there is no view instance as you could find in other MV* lib.
@@ -2902,7 +2875,7 @@ function View(data, parent, path) {
 
 View.prototype = new Template();
 
-// kill all attributes related metods
+// kill all attributes related methods
 ['attr', 'css', 'setClass', 'cl', 'visible', 'disabled', 'val']
 .forEach(function(method) {
 	View.prototype[method] = null;
@@ -2910,6 +2883,6 @@ View.prototype = new Template();
 
 module.exports = View;
 
-},{"./template":22}]},{},[2])
+},{"./template":20}]},{},[2])
 (2)
 });
