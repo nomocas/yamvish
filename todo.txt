@@ -11,6 +11,25 @@
 
 
 
+/*
+	style : 
+	
+
+	tout se joue dans le moteur d'output
+
+	output-engine/styles
+
+		.sass()
+		.style('css')
+
+		==> single pass, parcours complet :  tous les noeuds structurels (each if switch route)
+		==> n'execute que les styles : récolte complete
+		==> output fichier défini par call cli ou gulp ou ...
+
+		==> language css = laissé à post processeur
+
+		==> remove sass
+ */
 
 
 
