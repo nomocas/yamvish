@@ -1,5 +1,4 @@
 
-/*
 
 .set('opts', {
 		myProp: '{{ hello world }}'
@@ -7,11 +6,9 @@
 	.bindMap('opts')
 	// or
 	.bindMapToParent('opts')
-*/
 
 
 
-/*
 	style : 
 	
 
@@ -29,19 +26,16 @@
 		==> language css = laissé à post processeur
 
 		==> remove sass
- */
 
 
+Filter syntax : optional (), catch args
 
-Filter syntax : keep filters ? 		NO : todo : remove filters and find solution for placing them in globals
-
-
-simple interpolation with { ... }
+simple interpolation with { ... }																	ok
 
 add sync flag in context for string output
 
 
-.suspendUntil('{{ $route }}')							OK-dom-string : missing twopass
+.suspendUntil('{{ $route }}')																		OK
 
 
 work on subscribe handler arguments list (remove path ? put value first)     						OK	
