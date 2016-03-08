@@ -1,41 +1,180 @@
+template.container() ==> as view()										ok	
+==> so .view() become a shortCut for .container().newContext()			ok
+
+template.bindTo('foo::{{ id }}', ?localPath)
+
+c3po.subscribeTo('foo', '*', true, function(...){
+	context.set('...', ...);
+});
 
 
-.set('opts', {
-		myProp: '{{ hello world }}'
-	})
-	.bindMap('opts')
-	// or
-	.bindMapToParent('opts')
 
+==> rename agoraView in mountOnAgora : finalise it in twopass and omit in string
+
+==> switcher : manage proper switch transitions
+
+==> late toApi(..., ...) ==> if previously added to template : check and add
+
+and toApi(apiName, varName, function | templ)
+
+
+
+==> pour probleme boucle de subscription : 
+	peut etre passer la réféfence de l'appelant : permet simple chck quand on recoit retour
+
+context.notify devrait fournir appelant
+	==> fournir un evenement custom avec .caller
+
+
+
+//________________________ EMMET STYLE SYNTAX
+
+template.emmet(
+	'div #main .my-class .active({{ myVar +  2 }}) .{ myOtherVar + "--small" }  myAttr(hello) > a href(/howitworks) .outlined y:clickTo(hello)',
+	y().click('hello')
+);
+
+
+y:view uikit:bar
+	y:load(personas, persona::)
+	y:bindTo(personas, persona::)
+	y:loadAndBind(personas, persona::)
+	y:suspendUntil({{ personas }})
+	y:transition(fade, 300)
+	div #main .my-class .active({{ myVar }}) .{ myOtherVar + "--small" }
+		a href(/howitworks) .outlined y:clickTo(hello)
+			y:text( hello world )
+		y:use(uikit:foo)
+		y:each({{ personas | rql(sort(-)) }})
+			div.persona y:text({{ $this | json }})
+		y:mountIf({{ loading }})
+			div.loading
+				y:use(uikit:spinner)
+		y:html
+			<div>...</div>
+		y:text
+			lorem ...
+		y:dom
+			context.set('...', true).toggle(...);
+			node.addEventListener(..., ...);
+
+template.emmet('div #main .my-class .active({{ myVar +  2 }}) .{ myOtherVar + "--small" } myAttr(hello) ');
+
+
+//___________________________________________________
+
+.html('<div>{{}}</div>')
+
+		mountIf					OK
+		simpleIf				OK
+
+	destroyOnUnmount()
+		mountIf, switcher : check if container has been destroyed : if so : recreate it
+
+
+______________________ TAGS
+
+
+<view uikit:bloupi title=shloup>
+	<this>if(title) this.route('...')</this>
+	<div>{{ $opt.title }}</div>
+	<p><yield/></p>
+</view>
+
+
+<uikit:bloupi title=hello>
+	my content		
+</uikit:bloupi>
+
+
+
+
+<templ uikit:foo bar=shloup>
+	<this>if(bar)  this.css('...')</this>
+	<this:string>
+		this.text('this is only outputed when string rendered')
+	</this:string>
+	<templ:string>this is only outputed when string rendered </templ:string>
+	<templ:dom>
+		this is only outputed when dom rendered
+	</templ:dom>
+	<!-- below : error : no specific context to set opt : so not disponible -->
+	<div>{{ opt.bar }}</div>
+	<p><yield/></p>
+	<p><yield/></p>
+</templ>
+
+<uikit:foo bar=hello>
+	<yield>my content</yield>
+	<yield>my content 2</yield>
+</uikit:foo>
+
+function uikit:bar($opt){
+	this.view({
+		data:{...},
+		$opt:$opt,
+		path:...,
+		defaultOpt:{ ... }
+	}, y().route('...').div()...)
+}
+
+this.container(
+	y().transition('fade')
+	.div('...')
+)
+
+
+# OPTS Binding :
+when parsing opt : if xprs : aka {{ some }} under i prop
+create a dependant var : context.dependent('$opt.'+i, xpr, fromParent)
+
+# View shortcut
+this.view = function(options, templates...){
+	options = options || {};
+	options.data ? 
+	opt & defaultOpt
+	return this.container(
+		y().newContext(options.data, options.parent, options.path)
+		.eachTemplates(templates)
+	);
+}
+
+
+
++ <raw>   ou <html></html>
+...
+</raw>
+
+______________________ END TAGS
 
 
 	style : 
 	
 
-	tout se joue dans le moteur d'output
+		tout se joue dans le moteur d'output
 
-	output-engine/styles
+		output-engine/styles
 
-		.sass()
-		.style('css')
+			.sass()
+			.style('css')
 
-		==> single pass, parcours complet :  tous les noeuds structurels (each if switch route)
-		==> n'execute que les styles : récolte complete
-		==> output fichier défini par call cli ou gulp ou ...
+			==> single pass, parcours complet :  tous les noeuds structurels (each if switch route)
+			==> n'execute que les styles : récolte complete
+			==> output fichier défini par call cli ou gulp ou ...
 
-		==> language css = laissé à post processeur
+			==> language css = laissé à post processeur
 
-		==> remove sass
+			==> remove sass
 
 
 Filter syntax : optional (), catch args
 
-simple interpolation with { ... }																	ok
+simple interpolation with { ... }			ok
 
 add sync flag in context for string output
 
 
-.suspendUntil('{{ $route }}')																		OK
+.suspendUntil('{{ $route }}')																		OK (pas twopass)
 
 
 work on subscribe handler arguments list (remove path ? put value first)     						OK	
