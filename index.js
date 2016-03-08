@@ -16,10 +16,6 @@ y.Interpolable = interpolable.Interpolable;
 
 // Templates
 y.Template = require('./lib/template');
-y.View = require('./lib/view');
-y.view = function(data, parent, path) {
-	return new y.View(data, parent, path);
-};
 
 // API management
 y.addCustomTag = require('./lib/custom-tags');
