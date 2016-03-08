@@ -34,4 +34,11 @@ y.html = require('./lib/parsers/html-to-template');
 y.Container = require('./lib/output-engine/dom/container');
 require('./lib/output-engine/dom/engine');
 
+y.Error = function(status, message, report) {
+	this.status = status;
+	this.message = message;
+	this.report = report;
+}
+y.Error.prototype = new Error();
+
 module.exports = y;
