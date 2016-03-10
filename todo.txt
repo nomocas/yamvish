@@ -1,5 +1,3 @@
-template.container() ==> as view()										ok	
-==> so .view() become a shortCut for .container().newContext()			ok
 
 template.bindTo('foo::{{ id }}', ?localPath)
 
@@ -15,7 +13,6 @@ c3po.subscribeTo('foo', '*', true, function(...){
 
 ==> late toApi(..., ...) ==> if previously added to template : check and add
 
-and toApi(apiName, varName, function | templ)
 
 
 
@@ -27,38 +24,47 @@ context.notify devrait fournir appelant
 
 
 
-//________________________ EMMET STYLE SYNTAX
+//________________________ EMMET STYLE SYNTAX ===> OK !!!
 
 template.emmet(
-	'div #main .my-class .active({{ myVar +  2 }}) .{ myOtherVar + "--small" }  myAttr(hello) > a href(/howitworks) .outlined y:clickTo(hello)',
+	'div #main .my-class .active({{ myVar +  2 }}) .{ myOtherVar + "--small" }  myAttr(hello)',
 	y().click('hello')
 );
 
+template.emmet('div #main .my-class .active({{ myVar +  2 }}) .{ myOtherVar + "--small" } myAttr(hello) y:clickTo(/bloupi) ~some content ');
 
-y:view uikit:bar
-	y:load(personas, persona::)
-	y:bindTo(personas, persona::)
-	y:loadAndBind(personas, persona::)
-	y:suspendUntil({{ personas }})
-	y:transition(fade, 300)
-	div #main .my-class .active({{ myVar }}) .{ myOtherVar + "--small" }
-		a href(/howitworks) .outlined y:clickTo(hello)
-			y:text( hello world )
-		y:use(uikit:foo)
-		y:each({{ personas | rql(sort(-)) }})
-			div.persona y:text({{ $this | json }})
-		y:mountIf({{ loading }})
-			div.loading
-				y:use(uikit:spinner)
-		y:html
-			<div>...</div>
-		y:text
-			lorem ...
-		y:dom
-			context.set('...', true).toggle(...);
-			node.addEventListener(..., ...);
 
-template.emmet('div #main .my-class .active({{ myVar +  2 }}) .{ myOtherVar + "--small" } myAttr(hello) ');
+//________________________ EMMET STYLE SYNTAX PLUS : yamet
+
+uikit:bar
+	y:view
+		y:set($opt, $opt)
+		y:load(personas, persona::).bindTo(personas, persona::).transition(fade, 300)
+		y:set(hello) 
+			function(e){
+				console.log('...');
+			}
+		div #main .my-class .active({{ myVar }}) .{ myOtherVar + "--small" }
+			y:mountIf({{ !personas }})
+				div.loading
+					y:use(uikit:spinner)
+			y:suspendUntil({{ personas }})
+			a href(/howitworks) .outlined y:clickTo(/hello) ~hello world
+			y:use(uikit:foo)
+			y:each({{ personas | rql(sort(-)) }})
+				div.persona ~{{ $this | json }}
+
+			y:html
+				<div>...</div>
+			y:text
+				lorem ...
+			y:dom
+				context.set('...', true).toggle(...);
+				node.addEventListener(..., ...);
+
+
+
+
 
 
 //___________________________________________________
@@ -70,6 +76,14 @@ template.emmet('div #main .my-class .active({{ myVar +  2 }}) .{ myOtherVar + "-
 
 	destroyOnUnmount()
 		mountIf, switcher : check if container has been destroyed : if so : recreate it
+
+
+and toApi(apiName, varName, function | templ) 	OK
+
+
+template.container() ==> as view()										ok	
+==> so .view() become a shortCut for .container().newContext()			ok
+
 
 
 ______________________ TAGS
