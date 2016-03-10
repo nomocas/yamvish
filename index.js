@@ -29,6 +29,7 @@ y.toAPI = function(apiName, methodsObj) {
 y.elenpi = require('elenpi');
 y.listenerParser = require('./lib/parsers/listener-call');
 y.html = require('./lib/parsers/html-to-template');
+y.emmet = require('./lib/parsers/emmet-style');
 
 // DOM engine
 y.Container = require('./lib/output-engine/dom/container');
