@@ -1,9 +1,23 @@
+.clickBeside(function(e){
+	// fired only if click on something that is not current node
+})
+
+
 
 template.bindTo('foo::{{ id }}', ?localPath)
 
 c3po.subscribeTo('foo', '*', true, function(...){
 	context.set('...', ...);
 });
+
+
+
+==> use event object on notify context changes : 
+	place emitter context in details : 
+		avoid notification loop
+
+		==> need to place bind owner in _events array
+		==> maybe rewrite event emitter to hold owner of bind
 
 
 
