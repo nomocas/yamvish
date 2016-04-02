@@ -4,11 +4,20 @@
 
 
 
-template.bindTo('foo::{{ id }}', ?localPath)
+template.bindToProtocol('foo::{{ id }}', ?localPath)
 
 c3po.subscribeTo('foo', '*', true, function(...){
 	context.set('...', ...);
 });
+
+
+
+for destruction : 
+parentBinded detection in context
+so when deleting a container with context : 
+if(!context.parentBinded)
+	==> just remove container childNodes from mountPoint and forget container and context
+		
 
 
 
@@ -30,7 +39,7 @@ c3po.subscribeTo('foo', '*', true, function(...){
 
 
 
-==> pour probleme boucle de subscription : 
+==> pour probleme boucle de notification : 
 	peut etre passer la réféfence de l'appelant : permet simple chck quand on recoit retour
 
 context.notify devrait fournir appelant
