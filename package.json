@@ -50,6 +50,7 @@
     "jshint-stylish": "^1.0.1"
   },
   "dependencies": {
-    "elenpi": "^0.2.5"
+    "elenpi": "^0.2.5",
+    "nomocas-utils": "^0.0.6"
   }
 }
