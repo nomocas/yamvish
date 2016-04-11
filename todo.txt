@@ -1,3 +1,11 @@
+
+.set(path, func)
+
+==> bind func to context
+
+
+________________________
+
 .clickBeside(function(e){
 	// fired only if click on something that is not current node
 })
