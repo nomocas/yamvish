@@ -31,9 +31,9 @@ y.listenerParser = require('./lib/parsers/listener-call');
 y.html = require('./lib/parsers/html-to-template');
 y.emmet = require('./lib/parsers/emmet-style');
 
-// DOM engine
-y.Container = require('./lib/output-engine/dom/container');
+// load DOM engine by default
 require('./lib/output-engine/dom/engine');
+y.Container = require('./lib/output-engine/dom/container');
 
 y.Error = function(status, message, report) {
 	this.status = status;
