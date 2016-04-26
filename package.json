@@ -14,9 +14,9 @@
     "serve": "live-server . --ignore=node_modules,lib",
     "watch": "watch 'browserify -s y index.js > dist/yamvish.js' ./lib",
     "watch:example": "watch 'browserify -s y example/main.js > example/bundle.js' ./lib",
-    "bump:patch": "npm run build:prod && git add -A && git commit -m 'patch bump' && git push && mversion patch -m && git push --tags && npm publish && git push",
-    "bump:minor": "npm run build:prod && git add -A && git commit -m 'minor bump' && git push && mversion minor -m && git push --tags && npm publish && git push",
-    "bump:major": "npm run build:prod && git add -A && git commit -m 'major bump' && git push && mversion major -m && git push --tags && npm publish && git push"
+    "bump:patch": "npm run dist && git add -A && git commit -m 'patch bump' && git push && mversion patch -m && git push --tags && npm publish && git push",
+    "bump:minor": "npm run dist && git add -A && git commit -m 'minor bump' && git push && mversion minor -m && git push --tags && npm publish && git push",
+    "bump:major": "npm run dist && git add -A && git commit -m 'major bump' && git push && mversion major -m && git push --tags && npm publish && git push"
   },
   "repository": {
     "type": "git",
