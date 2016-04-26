@@ -4,6 +4,20 @@
 ==> bind func to context
 
 
+
+
+eacher : manage one single context list
+
+
+model and collection : finalise
+
+
+SEO : finalise route and others string output
+
+
+
+
+
 ________________________
 
 .clickBeside(function(e){
