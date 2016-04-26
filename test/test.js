@@ -1,9 +1,8 @@
 /**
  * @author Gilles Coomans <gilles.coomans@gmail.com>
- *
  */
 if (typeof require !== 'undefined') {
-	var chai = require("chai"),
+	var chai = require("./chai"),
 		y = require("../index");
 	require('../lib/output-engine/string');
 	require('../lib/output-engine/twopass');
@@ -178,7 +177,6 @@ describe("context", function() {
 				done();
 			});
 		});
-
 
 		it("should", function() {
 			expect(res2).to.equals("flup-rully-flappy");
