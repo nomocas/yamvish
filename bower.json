@@ -1,7 +1,7 @@
 {
   "name": "yamvish",
   "main": "index.js",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "authors": [
     "Gilles Coomans <gilles.coomans@gmail.com>"
   ],
