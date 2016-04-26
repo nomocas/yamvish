@@ -8,7 +8,11 @@ y.api = require('./lib/api');
 y.env = require('./lib/env');
 y.utils = require('./lib/utils');
 y.AsyncManager = require('./lib/async');
-y.Context = require('./lib/context');
+
+var ctx = require('./lib/context');
+y.Context = ctx.Context;
+y.Env = ctx.Env;
+
 y.Filter = require('./lib/filter');
 var interpolable = require('./lib/interpolable');
 y.interpolable = interpolable.interpolable;
