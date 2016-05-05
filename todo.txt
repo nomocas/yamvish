@@ -5,6 +5,22 @@
 
 
 
+y.toTemplate({ foo:function(){}, ... })
+y.toTemplate('foo', function(){})
+
+
+
+<api:app>
+
+</api:app>
+
+<template:foo>
+		
+</template:foo>
+
+
+
+
 
 eacher : manage one single context list
 
@@ -92,7 +108,7 @@ uikit:bar
 		div #main .my-class .active({{ myVar }}) .{ myOtherVar + "--small" }
 			y:mountIf({{ !personas }})
 				div.loading
-					y:use(uikit:spinner)
+					uikit:spinner
 			y:suspendUntil({{ personas }})
 			a href(/howitworks) .outlined y:clickTo(/hello) ~hello world
 			y:use(uikit:foo)
