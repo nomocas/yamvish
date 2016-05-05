@@ -1,6 +1,6 @@
 {
   "name": "yamvish",
-  "version": "0.10.4",
+  "version": "0.11.0",
   "description": "Yet Another MVish javascript library",
   "main": "index.js",
   "directories": {
