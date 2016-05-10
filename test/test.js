@@ -9,7 +9,7 @@ if (typeof require !== 'undefined') {
 }
 var expect = chai.expect;
 
-describe("context", function() {
+describe("context base", function() {
 	describe("set", function() {
 		var context = new y.Context();
 		context.set('hello', 'floupi');
@@ -182,7 +182,80 @@ describe("context", function() {
 			expect(res2).to.equals("flup-rully-flappy");
 		});
 	});
+});
 
+
+describe("context's binds", function() {
+	describe("object upward notification when sub properties change", function() {
+		var res;
+		var context = new y.Context({
+			foo: { bar: 'yamvish' }
+		});
+
+		context.subscribe('foo', function(value, type, path, key) {
+			res = { value: value, type: type, path: path, key: key };
+		}, true);
+
+		context.set('foo.bar', 'zoo')
+
+		it("should", function() {
+			expect(res).to.deep.equal({ value: 'zoo', type: 'set', path: ['foo', 'bar'], key: 'bar' });
+		});
+	});
+	describe("object upward notification when object change", function() {
+		var res;
+		var context = new y.Context({
+			foo: { bar: 'yamvish' }
+		});
+
+		context.subscribe('foo', function(value, type, path, key) {
+			res = { value: value, type: type, path: path, key: key };
+		}, true);
+		context.set('foo', { bar: 'zoo' })
+
+		it("should", function() {
+			expect(res).to.deep.equal({ value: { bar: 'zoo' }, type: 'set', path: ['foo'], key: 'foo' });
+		});
+	});
+
+	describe("object downward notification when parent change", function() {
+		var res;
+		var context = new y.Context({
+			foo: { bar: 'yamvish' }
+		});
+
+		context.subscribe('foo.bar', function(value, type, path, key) {
+			res = { value: value, type: type, path: path, key: key };
+		}, false);
+
+		context.set('foo', { bar: 'zoo' })
+
+		it("should", function() {
+			expect(res).to.deep.equal({ value: 'zoo', type: 'set', path: ['foo', 'bar'], key: 'bar' });
+		});
+	});
+
+	describe("object downward notification when object change", function() {
+		var res;
+		var context = new y.Context({
+			foo: { bar: 'yamvish' }
+		});
+
+		context.subscribe('foo', function(value, type, path, key) {
+			res = { value: value, type: type, path: path, key: key };
+		}, false);
+
+		context.set('foo', { bar: 'zoo' })
+
+		it("should", function() {
+			expect(res).to.deep.equal({ value: { bar: 'zoo' }, type: 'set', path: ['foo'], key: 'foo' });
+		});
+	});
+
+
+});
+
+describe("interpolable", function() {
 	describe("interpolable filter", function() {
 		var context = new y.Context({
 			foo: 'yamvish'
@@ -221,23 +294,23 @@ describe("context", function() {
 	});
 
 
-	/*
-		reset
 
-		get parent
+	// reset
 
-		subscribe parent
+	// get parent
 
-		unsubscribe
+	// subscribe parent
 
-		subscribe *
+	// unsubscribe
 
-		notify/all
+	// subscribe *
 
-		setAsync
+	// notify/all
 
-		pushAsync
-	 */
+	// setAsync
+
+	// pushAsync
+
 });
 
 
