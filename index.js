@@ -22,7 +22,6 @@ y.Interpolable = interpolable.Interpolable;
 y.Template = require('./lib/template');
 
 // API management
-y.addCustomTag = require('./lib/custom-tags');
 y.toAPI = function(apiName, methodsObj) {
 	var api = y.api[apiName] = y.api[apiName] || {};
 	y.utils.shallowMerge(methodsObj, api);
