@@ -340,36 +340,3 @@ describe("api", function() {
 		});
 	});
 });
-
-describe("custom tags", function() {
-	describe("add custom tag and use it", function() {
-		y.addCustomTag('floup', 'firstTag', {
-				anAttr: "custom tags !!"
-			},
-			y().div('hello {{ opts.anAttr }}').p('{{ opts.title }}')
-		);
-		var templ = y().use('floup:firstTag', {
-			title: 'foo !!'
-		});
-		var res = templ.toHTMLString();
-		it("should", function() {
-			expect(res).to.equals("<div>hello custom tags !!</div><p>foo !!</p>");
-		});
-	});
-	describe("custom tag with yield", function() {
-		y.addCustomTag('floup', 'firstTag', {
-				anAttr: "custom tags !!"
-			},
-			y().div('hello {{ opts.anAttr }}')
-			.__yield()
-			.p('{{ opts.title }}')
-		);
-		var templ = y().use('floup:firstTag', {
-			title: 'foo !!'
-		}, y().span('bar'));
-		var res = templ.toHTMLString();
-		it("should", function() {
-			expect(res).to.equals("<div>hello custom tags !!</div><span>bar</span><p>foo !!</p>");
-		});
-	});
-});
