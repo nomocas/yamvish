@@ -412,7 +412,6 @@ y.Interpolable = interpolable.Interpolable;
 y.Template = require('./lib/template');
 
 // API management
-y.addCustomTag = require('./lib/custom-tags');
 y.toAPI = function(apiName, methodsObj) {
 	var api = y.api[apiName] = y.api[apiName] || {};
 	y.utils.shallowMerge(methodsObj, api);
@@ -438,7 +437,7 @@ y.Error.prototype = new Error();
 
 module.exports = y;
 
-},{"./lib/api":5,"./lib/async":6,"./lib/context":7,"./lib/custom-tags":8,"./lib/env":9,"./lib/filter":10,"./lib/interpolable":11,"./lib/output-engine/dom/container":12,"./lib/output-engine/dom/engine":14,"./lib/parsers/emmet-style":16,"./lib/parsers/html-to-template":17,"./lib/parsers/listener-call":18,"./lib/template":22,"./lib/utils":23,"elenpi":1}],5:[function(require,module,exports){
+},{"./lib/api":5,"./lib/async":6,"./lib/context":7,"./lib/env":8,"./lib/filter":9,"./lib/interpolable":10,"./lib/output-engine/dom/container":11,"./lib/output-engine/dom/engine":13,"./lib/parsers/emmet-style":15,"./lib/parsers/html-to-template":16,"./lib/parsers/listener-call":17,"./lib/template":21,"./lib/utils":22,"elenpi":1}],5:[function(require,module,exports){
 // simple global object where store apis
 module.exports = {};
 
@@ -474,7 +473,7 @@ function trigger(mgr) {
 		list = async.errors.length ? async.fails : async.successes,
 		args = async.errors.length ? async.errors : mgr;
 	for (var j = 0; j < list.length; j++)
-		list[j](args);
+		list[j](args.length === 1 ? args[0] : args);
 	if (mgr.emit)
 		mgr.emit('stabilised', mgr);
 	async.successes = [];
@@ -535,7 +534,7 @@ utils.shallowMerge(Emitter.prototype, AsyncManager.prototype);
 
 module.exports = AsyncManager;
 
-},{"./utils":23,"nomocas-utils/lib/emitter":2}],7:[function(require,module,exports){
+},{"./utils":22,"nomocas-utils/lib/emitter":2}],7:[function(require,module,exports){
 /**  
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  * Context : An observable data holder.
@@ -957,77 +956,7 @@ function notifyUpstreams(space, type, path, value, index) {
 
 module.exports = { Context: Context, Env: Env };
 
-},{"./async":6,"./env":9,"./utils":23}],8:[function(require,module,exports){
-var Template = require('./template'),
-	api = require('./api'),
-	Context = require('./context');
-/**
- * use current customTag content
- * @return {Template} current template
- */
-Template.prototype.__yield = function() {
-	return this.exec({
-		dom: function(context, node) {
-			var templ = context.data.opts && context.data.opts.__yield;
-			if (!templ)
-				return;
-			return templ.call(node, context);
-		},
-		string: function(context, descriptor) {
-			var templ = context.data.opts && context.data.opts.__yield;
-			if (!templ)
-				return;
-			descriptor.children += templ.toHTMLString(context);
-		}
-	});
-};
-
-
-var customTags = {
-	dom: function(context, node, args, container) {
-		var ctx = new Context({
-			opts: args[0]
-		}, context);
-		var ctr = args[1].toContainer(ctx, container).appendTo(this);
-		ctr.context = ctx;
-	},
-	string: function(context, descriptor, args) {
-		descriptor.children += args[1].toHTMLString(new Context({
-			opts: args[0]
-		}, context));
-	},
-	firstPass: function(context, args) {
-		(context.children = context.children || []).push(new Context({
-			opts: args[0]
-		}, context));
-	},
-	secondPass: function(context, descriptor, args) {
-		descriptor.children += args[1].toHTMLString(context.children.shift());
-	}
-};
-
-/**
- * addCustomTag in specified api.
- * @param {[type]} apiName        [description]
- * @param {[type]} tagName        [description]
- * @param {[type]} defaultAttrMap [description]
- * @param {[type]} templ          [description]
- */
-module.exports = function(apiName, tagName, defaultAttrMap, templ) {
-	var space = api[apiName] = api[apiName] || {};
-	space[tagName] = function(attrMap, __yield) {
-		// copy default to attrMap
-		for (var i in defaultAttrMap)
-			if (typeof attrMap[i] === 'undefined')
-				attrMap[i] = defaultAttrMap[i];
-		attrMap.__yield = __yield;
-		var args = [attrMap, templ];
-		return this.exec(customTags, args);
-	}
-	return this;
-};
-
-},{"./api":5,"./context":7,"./template":22}],9:[function(require,module,exports){
+},{"./async":6,"./env":8,"./utils":22}],8:[function(require,module,exports){
 (function (global){
 var isServer = (typeof window === 'undefined') && (typeof document === 'undefined'),
 	Emitter = require('nomocas-utils/lib/emitter');
@@ -1058,7 +987,7 @@ var env = {
 module.exports = env;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"nomocas-utils/lib/emitter":2}],10:[function(require,module,exports){
+},{"nomocas-utils/lib/emitter":2}],9:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 
 function Filter(f) {
@@ -1111,6 +1040,12 @@ Filter.prototype = {
 			});
 		});
 		return this;
+	},
+	urlencode: function() {
+		this._queue.push(function(input) {
+			return encodeURI(input);
+		});
+		return this;
 	}
 };
 
@@ -1135,7 +1070,7 @@ url_encode
 url_decode
  */
 
-},{}],11:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 var Filter = require('./filter'),
 	replacementRegExp = /true|false|null|\$\.(?:[a-zA-Z]\w*(?:\.[\w\$]*)*)|\$(?:[a-zA-Z]\w*(?:\.[\w\$]*)*)\(?|"[^"]*"|'[^']*'|[a-zA-Z_]\w*(?:\.[\w\$]*)*\(?/g,
@@ -1147,7 +1082,8 @@ function tryExpr(func, context) {
 	try {
 		return func.call(context.data, context, context.env.data.expressionsGlobal);
 	} catch (e) {
-		console.error(e);
+		console.error('interpolable error : ', func.expression || e);
+		console.error(e.stack);
 		return '';
 	}
 }
@@ -1160,45 +1096,49 @@ function compileExpression(expr, filter, dependencies) {
 		dependencies.push.apply(dependencies, cacheXpr[total].dependencies);
 		return cacheXpr[total].func;
 	}
-	var dep = [];
-	expr = expr.replace(replacementRegExp, function(whole) {
-		if (whole == 'true' || whole == 'false' ||  whole == 'null')
-			return whole;
-		switch (whole[0]) {
-			case '"':
-			case "'":
+	var dep = [],
+		exprReplaced = expr.replace(replacementRegExp, function(whole) {
+			if (whole == 'true' || whole == 'false' ||  whole == 'null')
 				return whole;
-			case '$':
-				if (whole[1] === '.')
-					return '__global' + whole.substring(1);
-			default:
-				if (whole[whole.length - 1] === '(') { // function call
-					dep.push(whole.substring(0, whole.length - 1));
-					return '__context.data.' + whole;
-				} else { // simple path to var
-					dep.push(whole);
-					// we use indirect value retrieval to avoid throw if path provides null or undefined somewhere
-					return '__context.get(["' + whole.split('.').join('","') + '"])';
-				}
-		}
-	});
+			switch (whole[0]) {
+				case '"':
+				case "'":
+					return whole;
+				case '$':
+					if (whole[1] === '.')
+						return '__global' + whole.substring(1);
+				default:
+					if (whole[whole.length - 1] === '(') { // function call
+						dep.push(whole.substring(0, whole.length - 1));
+						return '__context.data.' + whole;
+					} else { // simple path to var
+						dep.push(whole);
+						// we use indirect value retrieval to avoid throw if path provides null or undefined somewhere
+						return '__context.get(["' + whole.split('.').join('","') + '"])';
+					}
+			}
+		});
 	// console.log('xpr parsing res : ', expr);
 	dependencies.push.apply(dependencies, dep);
 
-	var func = new Function("__context", "__global", "return " + expr + ";");
+	var func = new Function("__context", "__global", "return " + exprReplaced + ";");
 	if (!filter) {
 		cacheXpr[total] = {
 			func: func,
 			dependencies: dep
 		};
+		if (Interpolable.debug)
+			func.expression = expr;
 		return func;
 	}
 	// produce filter 
 	var fltr = new Function('Filter', 'return new Filter().' + filter)(Filter);
 	// wrap expr func with filter
 	var f = function(context, global) {
-		return fltr.call(this, func.call(this, context, global));
+		return fltr.call(context, func.call(this, context, global));
 	};
+	if (Interpolable.debug)
+		f.expression = expr;
 	cacheXpr[total] = {
 		func: f,
 		dependencies: dep
@@ -1380,7 +1320,7 @@ module.exports = {
 	Interpolable: Interpolable
 };
 
-},{"./filter":10}],12:[function(require,module,exports){
+},{"./filter":9}],11:[function(require,module,exports){
 /**  
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  * DOM only.
@@ -1533,8 +1473,11 @@ var proto = {
 		return this;
 	},
 	unmount: function(keepWitness, done) {
-		if (!this.parentNode) // container hasn't been mounted
+		if (!this.parentNode) { // container hasn't been mounted
+			if (done)
+				done(this);
 			return this;
+		}
 		if (!this._beforeUnmount) {
 			this.doUnmount(keepWitness);
 			if (done)
@@ -1661,7 +1604,7 @@ utils.shallowMerge(proto, Container.prototype);
 
 module.exports = Container;
 
-},{"../../utils":23,"nomocas-utils/lib/emitter":2}],13:[function(require,module,exports){
+},{"../../utils":22,"nomocas-utils/lib/emitter":2}],12:[function(require,module,exports){
 /**  
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  * DOM only.
@@ -1680,7 +1623,7 @@ module.exports = Container;
  */
 var utils = require('../../utils'),
 	Container = require('./container'),
-	Context = require('../../context'),
+	Context = require('../../context').Context,
 	Switcher = require('./switcher');
 
 // Template .each method for DOM handling
@@ -1860,7 +1803,7 @@ Eacher.prototype = {
 	}
 }*/
 
-},{"../../context":7,"../../utils":23,"./container":12,"./switcher":15}],14:[function(require,module,exports){
+},{"../../context":7,"../../utils":22,"./container":11,"./switcher":14}],13:[function(require,module,exports){
 /**  
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  * Pure DOM engine (modern browser first).
@@ -1871,7 +1814,7 @@ Eacher.prototype = {
  */
 var utils = require('../../utils'),
 	Container = require('./container'),
-	Context = require('../../context'),
+	Context = require('../../context').Context,
 	Template = require('../../template'),
 	Switcher = require('./switcher');
 
@@ -1941,6 +1884,12 @@ var engine = {
 			template = args[1];
 		engine.lateMount(context, node, [function(context, template, witness, parentContainer) {
 			var container;
+			context.onAgora(channel + ':toggle', function(context, message) {
+				if (!container || !container.mounted || container.closing)
+					context.toAgora(channel + ':show', message);
+				else
+					context.toAgora(channel + ':hide', message);
+			});
 			context.onAgora(channel + ':show', function(context, message) {
 				if (!container) {
 					container = y().view(template).toContainer(context, parentContainer);
@@ -1948,8 +1897,7 @@ var engine = {
 				}
 				if (message)
 					container.context.set(message);
-				if (!container.mounted)
-					container.remount();
+				container.remount();
 			});
 			context.onAgora(channel + ':hide', function(context, message) {
 				if (!container)
@@ -2122,10 +2070,7 @@ var engine = {
 			value.subscribeTo(context, function(value, type, path) {
 				if (value === val)
 					return;
-				if (node.tagName.toLowerCase() === 'textarea')
-					node.value = value;
-				else
-					node.setAttribute('value', value);
+				node.value = value;
 				val = value;
 			}, node.binds);
 			node.setAttribute('value', val);
@@ -2291,6 +2236,12 @@ var engine = {
 			return;
 		args[0].toDOM(node, context, container);
 	},
+	log: function(context, node, args, container) {
+		console.log(args[0] ||  '');
+		console.log('-> context', context);
+		console.log('-> node', node);
+		console.log('-> container', container);
+	},
 	//_____________________________________ MISC
 	suspendUntil: function(context, node, args, container) {
 		var xpr = args[0],
@@ -2359,7 +2310,7 @@ Template.prototype.toContainer = function(context, parent) {
 
 module.exports = engine;
 
-},{"../../context":7,"../../template":22,"../../utils":23,"./container":12,"./each":13,"./switcher":15}],15:[function(require,module,exports){
+},{"../../context":7,"../../template":21,"../../utils":22,"./container":11,"./each":12,"./switcher":14}],14:[function(require,module,exports){
 /**  
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  * Switcher : inner class that hold bunch of templates associated with a value.
@@ -2441,7 +2392,7 @@ Switcher.prototype = {
 
 module.exports = Switcher;
 
-},{"../../interpolable":11,"../../utils":23}],16:[function(require,module,exports){
+},{"../../interpolable":10,"../../utils":22}],15:[function(require,module,exports){
 var elenpi = require('elenpi'),
 	r = elenpi.r,
 	Parser = elenpi.Parser,
@@ -2542,10 +2493,10 @@ Template.prototype.emmet = function(xpr) {
 
 module.exports = parser;
 
-},{"../template":22,"elenpi":1}],17:[function(require,module,exports){
+},{"../template":21,"elenpi":1}],16:[function(require,module,exports){
 /** 
  * @author Gilles Coomans <gilles.coomans@gmail.com>
- * for parsing yamvish html5-like template
+ * for parsing html5 to yamvish template.
  */
 
 var elenpi = require('elenpi'),
@@ -2555,13 +2506,15 @@ var elenpi = require('elenpi'),
 	expression = require('./string-to-template'), // for data-template attribute parsing
 	api = require('../api'),
 	attributeExpr = /^([\w-_]+)\s*(?:=\s*("([^"]*)"|[\w-_]+|\{\{[^\}]+\}\}|\{[^\}]+\}))?\s*/,
-	yamTagWithPath = /if|each|with/,
-	yamTagWithoutPath = /client|server/,
+	yamTagWithPath = /if|each|with|mountIf/,
+	yamTagWithoutPath = /client|server|view|container/,
+	yamAPITag = /[\w\.\$_-]+\:[\w\.\$_-]+/,
+	yamTags = new RegExp('^<(' + yamTagWithPath.source + '|' + yamTagWithoutPath.source + '|' + yamAPITag.source + ')\\s*'),
 	openTags = require('./open-tags'), // html5 unstrict self closing tags 
 	rawContentTags = /^(?:script|style|code|templ)/;
 
 // raw inner content of tag
-function rawContent(tagName, string, templ) {
+function rawContent(tagName, string, templ, innerTemplate) {
 	var index = string.indexOf('</' + tagName + '>'),
 		raw;
 	if (index === -1)
@@ -2569,9 +2522,10 @@ function rawContent(tagName, string, templ) {
 	if (index) { // more than 0
 		raw = string.substring(0, index);
 		if (tagName === 'templ') // produce local api-like handler
-			templ.use(new Function(raw));
-		else
-			templ.rawContent = raw;
+		{
+			innerTemplate.templFunc = new Function(raw);
+		} else
+			innerTemplate.raw(raw);
 	}
 	return string.substring(index + tagName.length + 3);
 }
@@ -2584,12 +2538,12 @@ var rules = {
 		.rule('children')
 		.space(),
 
-	comment: r().regExp(/^<!--(?:.|\s)*?(?=-->)-->/),
+	comment: r().regExp(/^<!--(?:.|\s)*?(?=-->)-->/, false, function() {}),
 
 	tagEnd: r()
 		// closing tag
 		.regExp(/^\s*<\/([\w:-_]+)\s*>/, false, function(templ, cap) {
-			if (templ.tagName !== cap[1].toLowerCase())
+			if (templ.tagName !== cap[1])
 				throw new Error('tag badly closed : ' + cap[1] + ' - (at opening : ' + templ.tagName + ')');
 		}),
 
@@ -2597,21 +2551,25 @@ var rules = {
 	children: r()
 		.zeroOrMore(null,
 			r().oneOf([
-				r().space().rule('comment').skip(),
+				r().space().rule('comment'),
 				r().space().rule('yamTag'),
 				r().space().rule('tag'),
 				r().rule('text')
 			])
 		),
 
-	text: r().regExp(/^[^<]+/, false, function(templ, cap) {
-		templ.text(cap[0]);
-	}),
+	text: r()
+		// .regExp(/^\s+/, true, function(templ) {
+		// 	templ.text(' ');
+		// })
+		.regExp(/^[^<]+/, false, function(templ, cap) {
+			templ.text(cap[0]);
+		}),
 
 	// normal tag (including raw tags and so also special yamvish templ tag)
 	tag: r()
 		.regExp(/^<([\w-_]+)\s*/, false, function(templ, cap) {
-			templ.tagName = cap[1].toLowerCase();
+			templ.tagName = cap[1];
 		})
 		.done(function(string, templ) {
 			templ._innerTemplate = new Template();
@@ -2625,7 +2583,7 @@ var rules = {
 					return string; // no children
 
 				if (rawContentTags.test(templ.tagName)) // get raw content
-					return rawContent(templ.tagName, string, templ);
+					return rawContent(templ.tagName, string, templ, templ._innerTemplate);
 
 				// get inner tag content
 				var ok = this.exec(string, templ._innerTemplate, this.rules.children);
@@ -2642,19 +2600,22 @@ var rules = {
 				templ.tagName = '__yield';
 			if (templ.tagName !== 'templ')
 				templ.tag(templ.tagName, templ._innerTemplate);
+			else
+				templ.use(templ._innerTemplate.templFunc);
+
 			templ._innerTemplate = null;
 			templ.tagName = null;
 			return string;
 		}),
 
 	// yamvish special tags path arguments
-	yamTagPath: r().regExp(/^([\w-_]+|\{\{[^\}]*\}\}|\{[^\}]*\})/, false, function(templ, cap) {
+	yamTagPath: r().regExp(/^([\w-_$]+|\{{1,2}[^\}]*\}{1,2})/, false, function(templ, cap) {
 		templ.path = cap[1];
 	}),
 
 	yamTag: r() // yamvish special tags
-		.regExp(/^<(if|each|with|client|server|\w+:\w+)\s*/, false, function(templ, cap) {
-			templ.tagName = cap[1].toLowerCase();
+		.regExp(yamTags, false, function(templ, cap) {
+			templ.tagName = cap[1];
 		})
 		.done(function(string, templ) {
 			var attrMap = {};
@@ -2690,10 +2651,13 @@ var rules = {
 				case 'if':
 				case 'each':
 				case 'with':
+				case 'mountIf':
 					templ[tagName](attrMap.path, _yield);
 					break;
 				case 'client':
 				case 'server':
+				case 'view':
+				case 'container':
 					templ[tagName](_yield);
 					break;
 				default: // api tag
@@ -2726,7 +2690,8 @@ var rules = {
 						if (!value)
 							break;
 						value.split(/\s+/).forEach(function(cl) {
-							templ.cl(cl);
+							if (cl)
+								templ.cl(cl);
 						});
 						break;
 					case 'data-template':
@@ -2796,7 +2761,7 @@ res
 
  */
 
-},{"../api":5,"../template":22,"./open-tags":19,"./string-to-template":21,"elenpi":1}],18:[function(require,module,exports){
+},{"../api":5,"../template":21,"./open-tags":18,"./string-to-template":20,"elenpi":1}],17:[function(require,module,exports){
 /** 
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  * for parsing listener attribute : e.g. .click('foo(bar, 12)')
@@ -2864,14 +2829,14 @@ parser.parseListener = function(string) {
 
 module.exports = parser;
 
-},{"./primitive-argument-rules":20,"elenpi":1}],19:[function(require,module,exports){
+},{"./primitive-argument-rules":19,"elenpi":1}],18:[function(require,module,exports){
 /**
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  * all tags that could be used without closing sequence (as <br>)
  */
 module.exports = /(br|input|img|area|base|col|command|embed|hr|img|input|keygen|link|meta|param|source|track|wbr)/;
 
-},{}],20:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 /**
  * @author Gilles Coomans <gilles.coomans@gmail.com>
  * elenpi rules for primitives function's arguments. aka : "double", 'single', 1.12, 14, true, false
@@ -2898,10 +2863,11 @@ var rules = {
 
 module.exports = rules;
 
-},{"elenpi":1}],21:[function(require,module,exports){
+},{"elenpi":1}],20:[function(require,module,exports){
 /**  
  * @author Gilles Coomans <gilles.coomans@gmail.com>
- * for parsing data-template attributes
+ * for parsing data-template attributes as :
+ * text('hello').div('bloupi').click('showAll(myVar)')
  */
 
 var elenpi = require('elenpi'),
@@ -2980,13 +2946,13 @@ module.exports = parser;
 console.log(y.expression.parseTemplate("click ( '12', 14, true, p(2, 4, span( false).p())). div(12345)"));
  */
 
-},{"../template":22,"./primitive-argument-rules":20,"elenpi":1}],22:[function(require,module,exports){
+},{"../template":21,"./primitive-argument-rules":19,"elenpi":1}],21:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 "use strict";
 
 var utils = require('./utils'),
 	interpolable = require('./interpolable').interpolable,
-	Context = require('./context'),
+	Context = require('./context').Context,
 	api = require('./api'),
 	listenerParser = require('./parsers/listener-call');
 
@@ -3032,11 +2998,17 @@ function parseAttrMap(attrMap) {
 utils.parseAttrMap = parseAttrMap;
 
 function execEngineBlock(templ, block, args, suspendAfter) {
-	templ._queue.push({
-		engineBlock: block,
-		args: args,
-		suspendAfter: suspendAfter
-	});
+	if (suspendAfter)
+		templ._queue.push({
+			engineBlock: block,
+			args: args,
+			suspendAfter: true
+		});
+	else
+		templ._queue.push({
+			engineBlock: block,
+			args: args
+		});
 	return templ;
 }
 
@@ -3056,12 +3028,19 @@ function y() {
 }
 
 function enqueue(templ, type, handler, args, suspendAfter) {
-	templ._queue.push({
-		type: type,
-		handler: handler,
-		args: args,
-		suspendAfter: suspendAfter
-	});
+	if (suspendAfter)
+		templ._queue.push({
+			type: type,
+			handler: handler,
+			args: args,
+			suspendAfter: suspendAfter
+		});
+	else
+		templ._queue.push({
+			type: type,
+			handler: handler,
+			args: args
+		});
 	return templ;
 }
 
@@ -3187,13 +3166,8 @@ Template.prototype = {
 			context.del(path);
 		});
 	},
-	newContext: function(data, parent, path) {
-		var path;
-		if (typeof data === 'string') {
-			path = data;
-			data = null;
-		}
-		return this.exec('newContext', [path ? undefined : data, parent, path]);
+	newContext: function(data, parent) {
+		return this.exec('newContext', [data, parent]);
 	},
 	with: function(path, template) {
 		return this.exec('with', [path, template]);
@@ -3284,7 +3258,7 @@ Template.prototype = {
 				update(val);
 			})
 			.string(function(context, descriptor) {
-				var html = content.output(context);
+				var html = content.__interpolable__ ? content.output(context) : content;
 				if (html[0] !== '<') // to be consistant with node approach
 					html = '<p>' + html + '</p>';
 				descriptor.children += html;
@@ -3337,6 +3311,9 @@ Template.prototype = {
 				t.use(arguments[i]);
 		}
 		return this.exec('tag', [name, t]);
+	},
+	raw: function(raw) {
+		return this.exec('raw', [raw]);
 	},
 	br: function() {
 		return this.exec('br');
@@ -3429,7 +3406,7 @@ Template.prototype = {
 			handler = listenerParser.parseListener(handler);
 		return this.exec('off', [name, handler]);
 	},
-	//___________________________________________ Collection
+	//___________________________________________ Collection iterator
 	each: function(path, templ, emptyTempl) {
 		if (!templ)
 			throw new Error('yamvish each methods needs a template. (path : ' + path + ')');
@@ -3438,22 +3415,23 @@ Template.prototype = {
 			emptyTempl = (typeof emptyTempl === 'string') ? y().use(emptyTempl) : emptyTempl;
 		return this.exec('each', [path, templ, emptyTempl]);
 	},
-	//___________________________________________ Templates Collection
+	//___________________________________________ Templates Collection iterator
 	eachTemplates: function(templates, handler) {
 		return this.exec('eachTemplates', [templates, handler]);
 	},
-	//_____________________________ Conditional node rendering
-	mountIf: function(condition, successTempl, failTempl) {
-		successTempl = (typeof successTempl === 'string') ? y().use(successTempl) : successTempl;
-		if (failTempl)
-			failTempl = (typeof failTempl === 'string') ? y().use(failTempl) : failTempl;
-		return this.exec('mountIf', [interpolable(condition), successTempl, failTempl]);
-	},
+	//_____________________________ Conditional immediate execution (no bind)
 	if: function(condition, successTempl, failTempl) {
 		successTempl = (typeof successTempl === 'string') ? y().use(successTempl) : successTempl;
 		if (failTempl)
 			failTempl = (typeof failTempl === 'string') ? y().use(failTempl) : failTempl;
 		return this.exec('if', [interpolable(condition), successTempl, failTempl]);
+	},
+	//_____________________________ Conditional node rendering/mounting (binded)
+	mountIf: function(condition, successTempl, failTempl) {
+		successTempl = (typeof successTempl === 'string') ? y().use(successTempl) : successTempl;
+		if (failTempl)
+			failTempl = (typeof failTempl === 'string') ? y().use(failTempl) : failTempl;
+		return this.exec('mountIf', [interpolable(condition), successTempl, failTempl]);
 	},
 	switch: function(xpr, map) {
 		for (var i in map)
@@ -3470,15 +3448,12 @@ Template.prototype = {
 		if (typeof name === 'string')
 			name = name.split(':');
 		var method = (name.forEach ? utils.getApiMethod(api, name) : name);
-		if (method.__yView__)
-			return this.exec('mountHere', [method]);
-		else if (method.__yTemplate__)
+		if (method.__yTemplate__)
 			this._queue = this._queue.concat(method._queue);
 		else
 			method.apply(this, args);
 		return this;
 	},
-	// for lazzy people : 
 	// add all methods from given api to current template instance (will only affect current chain)
 	addApi: function(name) {
 		var Api = (typeof name === 'string') ? api[name] : name;
@@ -3506,10 +3481,14 @@ Template.prototype = {
 		return this.exec('suspendUntil', [interpolable(xpr), this._queue.length + 1, this], true);
 	},
 	//______ DOM ONLY
+	// add container witness
 	addWitness: function(title) {
-		return this.dom(function(context, node) {
+		return this.dom(function(context, node, args, container) {
 			node.addWitness(title);
 		});
+	},
+	log: function(message) {
+		return this.exec('log', [message]);
 	}
 };
 
@@ -3521,7 +3500,7 @@ Template.addAPI = function(api) {
 
 Template.prototype.cl = Template.prototype.setClass;
 
-// Complete tag list
+// HTML5 tag list
 ['div', 'span', 'ul', 'li', 'button', 'p', 'form', 'table', 'tr', 'td', 'th', 'section', 'code', 'pre', 'q', 'blockquote', 'style', 'nav', 'article', 'header', 'footer', 'aside', 'label', 'option']
 .forEach(function(tag) {
 	Template.prototype[tag] = function() {
@@ -3531,14 +3510,16 @@ Template.prototype.cl = Template.prototype.setClass;
 	};
 });
 
-// Complete events list
+// Dom Events list
 ['click', 'blur', 'focus', 'submit', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'touchcancel', 'touchleave', 'touchmove']
-.forEach(function(eventName) {
+.forEach(function(eventName, preventDefault) {
 	Template.prototype[eventName] = function(handler, useCapture) {
 		if (typeof handler === 'string')
 			handler = listenerParser.parseListener(handler);
 		return this.dom(function(context, node, args, container) {
 			node.addEventListener(eventName, function(e) {
+				if (preventDefault)
+					e.preventDefault();
 				e.targetContainer = container;
 				e.context = context;
 				handler.call(context, e);
@@ -3551,7 +3532,8 @@ Template.prototype.clickToAgora = function() {
 	var argus = arguments;
 	return this.dom(function(context, node, args, container) {
 		node.addEventListener('click', function(e) {
-			e.preventDefault();
+			if (node.tagName === 'A')
+				e.preventDefault();
 			e.targetContainer = container;
 			e.context = context;
 			context.toAgora.apply(context, argus);
@@ -3561,7 +3543,7 @@ Template.prototype.clickToAgora = function() {
 
 module.exports = Template;
 
-},{"./api":5,"./context":7,"./interpolable":11,"./parsers/listener-call":18,"./utils":23}],23:[function(require,module,exports){
+},{"./api":5,"./context":7,"./interpolable":10,"./parsers/listener-call":17,"./utils":22}],22:[function(require,module,exports){
 /**  @author Gilles Coomans <gilles.coomans@gmail.com> */
 var utils = module.exports = {
 	destroyChildren: function(node, removeFromParent) {
