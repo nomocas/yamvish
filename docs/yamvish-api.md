@@ -52,9 +52,13 @@
 
 	Context (observable data holder)
 
-	Template
+	Interpolable (bindable expression)
 
-	Nodes and Container (mountable nodes group)
+	Template (mediator)
+
+	DOM Nodes
+
+	+ Container (mountable nodes group)
 
 
 
@@ -220,4 +224,23 @@ y.html.parse
 
 	...
 
+
+
+# Mounting policies
+
+
+from template proto : 
+.mountIf('{{ condition }}', templ)
+.container(templ)
+.container('{{ condition }}', templ)
+.container({ mountIf:'{{ jfjfk }}'  })
+.lateMount(...)
+.mountHere(container)
+
+
+from container proto : 
+.mount(selector | node)
+.unmount()
+._doUnmount()
+.remount()
 
