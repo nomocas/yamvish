@@ -45,4 +45,8 @@ y.Error = function(status, message, report) {
 }
 y.Error.prototype = new Error();
 
+var plateform = require('nomocas-webutils/lib/plateform');
+for (var i in plateform)
+	y[i] = plateform[i];
+
 module.exports = y;
