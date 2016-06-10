@@ -66,10 +66,10 @@ describe("context base", function() {
 			context.del('test');
 		});
 		it("should", function() {
-			expect(res).to.equals('delete-test-true-test');
+			expect(res).to.equals('delete-test-undefined-test');
 		});
 	});
-	describe("del in array and listen", function() {
+	describe("del in array and listen upward", function() {
 		var res, context;
 		before(function(done) {
 			context = new y.Context({
@@ -78,11 +78,11 @@ describe("context base", function() {
 			context.subscribe('myCollec', function(value, type, path, index) {
 				res = type + "-" + path + "-" + value + "-" + index;
 				done();
-			});
+			}, true);
 			context.del('myCollec.0');
 		});
 		it("should", function() {
-			expect(res).to.equals('removeAt-myCollec-foo-0');
+			expect(res).to.equals('delete-0-undefined-0');
 			expect(context.data.myCollec).to.deep.equal(['bar']);
 		});
 	});
@@ -129,11 +129,11 @@ describe("context base", function() {
 			context.subscribe('myCollec', function(value, type, path, index) {
 				res = type + "-" + path + "-" + value + "-" + index;
 				done();
-			});
+			}, true);
 			context.toggleInArray('myCollec', 'fleu');
 		});
 		it("should", function() {
-			expect(res).to.equals('removeAt-myCollec-fleu-1');
+			expect(res).to.equals('delete-1-undefined-1');
 			expect(context.data.myCollec).to.deep.equal(['bar']);
 		});
 	});
@@ -199,7 +199,7 @@ describe("context's binds", function() {
 		context.set('foo.bar', 'zoo')
 
 		it("should", function() {
-			expect(res).to.deep.equal({ value: 'zoo', type: 'set', path: ['foo', 'bar'], key: 'bar' });
+			expect(res).to.deep.equal({ value: 'zoo', type: 'set', path: ['bar'], key: 'bar' });
 		});
 	});
 	describe("object upward notification when object change", function() {
@@ -211,13 +211,42 @@ describe("context's binds", function() {
 		context.subscribe('foo', function(value, type, path, key) {
 			res = { value: value, type: type, path: path, key: key };
 		}, true);
-		context.set('foo', { bar: 'zoo' })
+		context.set('foo', { bar: 'zoo' });
 
 		it("should", function() {
-			expect(res).to.deep.equal({ value: { bar: 'zoo' }, type: 'set', path: ['foo'], key: 'foo' });
+			expect(res).to.deep.equal({ value: { bar: 'zoo' }, type: 'set', path: [], key: 'foo' });
 		});
 	});
+	describe("object upward notification when subobject change", function() {
+		var res;
+		var context = new y.Context({
+			foo: { bar: 'yamvish' }
+		});
 
+		context.subscribe('foo', function(value, type, path, key) {
+			res = { value: value, type: type, path: path, key: key };
+		}, true);
+		context.set('foo.bar', 'zoo');
+
+		it("should", function() {
+			expect(res).to.deep.equal({ value: 'zoo', type: 'set', path: ['bar'], key: 'bar' });
+		});
+	});
+	describe("object upward notification when sub-subobject change", function() {
+		var res;
+		var context = new y.Context({
+			foo: { bar: { zoo: 'yamvish' } }
+		});
+
+		context.subscribe('foo', function(value, type, path, key) {
+			res = { value: value, type: type, path: path, key: key };
+		}, true);
+		context.set('foo.bar.zoo', 'yop');
+
+		it("should", function() {
+			expect(res).to.deep.equal({ value: 'yop', type: 'set', path: ['bar', 'zoo'], key: 'zoo' });
+		});
+	});
 	describe("object downward notification when parent change", function() {
 		var res;
 		var context = new y.Context({
@@ -337,6 +366,203 @@ describe("api", function() {
 		var res = templ.toHTMLString();
 		it("should", function() {
 			expect(res).to.equals("hello bloupi");
+		});
+	});
+});
+
+
+describe("context eacher : ", function() {
+	describe("construct", function() {
+		var ctx = new y.Context({
+				collec: [1, 2, 3, 4, 5]
+			}),
+			eacher = new y.ContextEacher(ctx, 'collec');
+		var result = eacher.children.map(function(i) {
+			return i.data;
+		});
+		it("should", function() {
+			expect(result).to.deep.equal([1, 2, 3, 4, 5]);
+		});
+	});
+	describe("direct API usage : ", function() {
+		describe("updateArray with less elements", function() {
+			var ctx = new y.Context({
+					collec: [1, 2, 3, 4, 5]
+				}),
+				eacher = new y.ContextEacher(ctx, 'collec');
+
+			eacher.updateArray([6, 7, 8]);
+			var result = eacher.children.map(function(i) {
+				return i.data;
+			});
+			it("should", function() {
+				expect(result).to.deep.equal([6, 7, 8]);
+			});
+		});
+		describe("updateArray with more elements", function() {
+			var ctx = new y.Context({
+					collec: [1, 2, 3, 4, 5]
+				}),
+				eacher = new y.ContextEacher(ctx, 'collec');
+
+			eacher.updateArray([6, 7, 8, 9, 10, 11, 12]);
+			var result = eacher.children.map(function(i) {
+				return i.data;
+			});
+			it("should", function() {
+				expect(result).to.deep.equal([6, 7, 8, 9, 10, 11, 12]);
+			});
+		});
+		describe("pushItem", function() {
+			var ctx = new y.Context({
+					collec: [1, 2, 3, 4, 5]
+				}),
+				eacher = new y.ContextEacher(ctx, 'collec');
+
+			eacher.pushItem(6);
+			var result = eacher.children.map(function(i) {
+				return i.data;
+			});
+			it("should", function() {
+				expect(result).to.deep.equal([1, 2, 3, 4, 5, 6]);
+			});
+		});
+		describe("deleteItem", function() {
+			var ctx = new y.Context({
+					collec: [1, 2, 3, 4, 5]
+				}),
+				eacher = new y.ContextEacher(ctx, 'collec');
+
+			eacher.deleteItem(2);
+			var result = eacher.children.map(function(i) {
+				return i.data;
+			});
+			it("should", function() {
+				expect(result).to.deep.equal([1, 2, 4, 5]);
+			});
+		});
+		describe("updateItem", function() {
+			var ctx = new y.Context({
+					collec: [1, 2, 3, 4, 5]
+				}),
+				eacher = new y.ContextEacher(ctx, 'collec');
+
+			eacher.updateItem('set', [2], 7, 2); // type, path, value, index
+			var result = eacher.children.map(function(i) {
+				return i.data;
+			});
+			it("should", function() {
+				expect(result).to.deep.equal([1, 2, 7, 4, 5]);
+			});
+		});
+	});
+	describe("through parent context binds : ", function() {
+		describe("updateArray with less elements", function() {
+			var ctx = new y.Context({
+					collec: [1, 2, 3, 4, 5]
+				}),
+				eacher = new y.ContextEacher(ctx, 'collec');
+
+			ctx.set('collec', [6, 7, 8]);
+			var result = eacher.children.map(function(i) {
+				return i.data;
+			});
+			it("should", function() {
+				expect(result).to.deep.equal([6, 7, 8]);
+			});
+		});
+		describe("updateArray with more elements", function() {
+			var ctx = new y.Context({
+					collec: [1, 2, 3, 4, 5]
+				}),
+				eacher = new y.ContextEacher(ctx, 'collec');
+
+			ctx.set('collec', [6, 7, 8, 9, 10, 11, 12]);
+			var result = eacher.children.map(function(i) {
+				return i.data;
+			});
+			it("should", function() {
+				expect(result).to.deep.equal([6, 7, 8, 9, 10, 11, 12]);
+			});
+		});
+		describe("pushItem", function() {
+			var ctx = new y.Context({
+					collec: [1, 2, 3, 4, 5]
+				}),
+				eacher = new y.ContextEacher(ctx, 'collec');
+
+			ctx.push('collec', 6);
+			var result = eacher.children.map(function(i) {
+				return i.data;
+			});
+			it("should", function() {
+				expect(result).to.deep.equal([1, 2, 3, 4, 5, 6]);
+			});
+		});
+		describe("deleteItem", function() {
+			var ctx = new y.Context({
+					collec: [1, 2, 3, 4, 5]
+				}),
+				eacher = new y.ContextEacher(ctx, 'collec');
+
+			ctx.del('collec.2');
+			var result = eacher.children.map(function(i) {
+				return i.data;
+			});
+			it("should", function() {
+				expect(result).to.deep.equal([1, 2, 4, 5]);
+			});
+		});
+		describe("updateItem", function() {
+			var ctx = new y.Context({
+					collec: [1, 2, 3, 4, 5]
+				}),
+				eacher = new y.ContextEacher(ctx, 'collec');
+
+			ctx.set('collec.2', 7); // type, path, value, index
+			var result = eacher.children.map(function(i) {
+				return i.data;
+			});
+			it("should", function() {
+				expect(result).to.deep.equal([1, 2, 7, 4, 5]);
+			});
+		});
+	});
+});
+
+
+describe("displace item : ", function() {
+	describe("context only", function() {
+		var ctx = new y.Context({
+			collec: [1, 2, 3, 4, 5]
+		});
+		ctx.displaceItem('collec', { fromIndex: 0, toIndex: 3 });
+		var result = ctx.data.collec;
+		it("should", function() {
+			expect(result).to.deep.equal([2, 3, 4, 1, 5]);
+		});
+	});
+	describe("context and context eacher", function() {
+		var ctx = new y.Context({
+				collec: [1, 2, 3, 4, 5]
+			}),
+			eacher = new y.ContextEacher(ctx, 'collec');
+
+		ctx.displaceItem('collec', { fromIndex: 0, toIndex: 3 });
+
+		var result = eacher.children.map(function(i) {
+			return i.data;
+		});
+		var indexes = eacher.children.map(function(i) {
+			return i.index;
+		});
+		var paths = eacher.children.map(function(i) {
+			return i.path;
+		});
+		it("should", function() {
+			expect(result).to.deep.equal([2, 3, 4, 1, 5]);
+			expect(indexes).to.deep.equal([0, 1, 2, 3, 4]);
+			expect(paths).to.deep.equal(['collec.0', 'collec.1', 'collec.2', 'collec.3', 'collec.4']);
 		});
 	});
 });
