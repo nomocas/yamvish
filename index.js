@@ -13,6 +13,8 @@ var ctx = require('./lib/context');
 y.Context = ctx.Context;
 y.Env = ctx.Env;
 
+y.ContextEacher = require('./lib/context-eacher');
+
 y.Filter = require('./lib/filter');
 var interpolable = require('./lib/interpolable');
 y.interpolable = interpolable.interpolable;
