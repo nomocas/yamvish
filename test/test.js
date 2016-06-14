@@ -566,3 +566,236 @@ describe("displace item : ", function() {
 		});
 	});
 });
+describe("insert item : ", function() {
+	describe("context only", function() {
+		var ctx = new y.Context({
+			collec: [1, 2, 3, 4, 5]
+		});
+		ctx.insertItem('collec', { data: 123, index: 3 });
+		var result = ctx.data.collec;
+		it("should", function() {
+			expect(result).to.deep.equal([1, 2, 3, 123, 4, 5]);
+		});
+	});
+	describe("context and context eacher", function() {
+		var ctx = new y.Context({
+				collec: [1, 2, 3, 4, 5]
+			}),
+			eacher = new y.ContextEacher(ctx, 'collec');
+
+		ctx.insertItem('collec', { data: 123, index: 3 });
+
+		var result = eacher.children.map(function(i) {
+			return i.data;
+		});
+		var indexes = eacher.children.map(function(i) {
+			return i.index;
+		});
+		var paths = eacher.children.map(function(i) {
+			return i.path;
+		});
+		it("should", function() {
+			expect(result).to.deep.equal([1, 2, 3, 123, 4, 5]);
+			expect(indexes).to.deep.equal([0, 1, 2, 3, 4, 5]);
+			expect(paths).to.deep.equal(['collec.0', 'collec.1', 'collec.2', 'collec.3', 'collec.4', 'collec.5']);
+		});
+	});
+});
+describe("parent forwarding and contexts relations : ", function() {
+	describe("context only from root to leaf (double child)", function() {
+		var rootCtx = new y.Context({
+			obj: { title: 'Hello World' }
+		});
+
+		var childContext1 = new y.Context(null, rootCtx, 'obj');
+		var childContext2 = new y.Context(null, rootCtx, 'obj');
+
+		childContext1.dependent('local1', ['title'], function(title) {
+			if (title)
+				return title.toUpperCase();
+			return 'unset1';
+		});
+		childContext2.dependent('local2', ['title'], function(title) {
+			if (title)
+				return title.toLowerCase();
+			return 'unset2';
+		});
+
+		rootCtx.set('obj.title', 'Foo Bar');
+
+		var res = [rootCtx.data.obj.title, childContext1.data.local1, childContext2.data.local2];
+
+		it("should", function() {
+			expect(res).to.deep.equal(['Foo Bar', 'FOO BAR', 'foo bar']);
+		});
+	});
+	describe("context only from leaf to root to leaf (double child)", function() {
+		var rootCtx = new y.Context({
+			obj: { title: 'Hello World' }
+		});
+
+		var childContext1 = new y.Context(null, rootCtx, 'obj');
+		var childContext2 = new y.Context(null, rootCtx, 'obj');
+
+		childContext1.dependent('local1', ['title'], function(title) {
+			if (title)
+				return title.toUpperCase();
+			return 'unset1';
+		});
+		childContext2.dependent('local2', ['title'], function(title) {
+			if (title)
+				return title.toLowerCase();
+			return 'unset2';
+		});
+
+		childContext1.set('title', 'Foo Bar');
+
+		var res = [rootCtx.data.obj.title, childContext1.data.local1, childContext2.data.local2];
+
+		it("should", function() {
+			expect(res).to.deep.equal(['Foo Bar', 'FOO BAR', 'foo bar']);
+		});
+	});
+	// CONTEXT EACHER
+	describe("context and context eacher : from root to leaf (double eacher)", function() {
+		var ctx = new y.Context({
+				collec: [1, 2, 3, 4, 5]
+			}),
+			eacher1 = new y.ContextEacher(ctx, 'collec'),
+			eacher2 = new y.ContextEacher(ctx, 'collec');
+		ctx.insertItem('collec', { data: 123, index: 3 });
+
+		var result1 = eacher1.children.map(function(i) {
+			return i.data;
+		});
+		var indexes1 = eacher1.children.map(function(i) {
+			return i.index;
+		});
+		var paths1 = eacher1.children.map(function(i) {
+			return i.path;
+		});
+		var result2 = eacher2.children.map(function(i) {
+			return i.data;
+		});
+		var indexes2 = eacher2.children.map(function(i) {
+			return i.index;
+		});
+		var paths2 = eacher2.children.map(function(i) {
+			return i.path;
+		});
+		it("should", function() {
+			expect(result1).to.deep.equal([1, 2, 3, 123, 4, 5]);
+			expect(indexes1).to.deep.equal([0, 1, 2, 3, 4, 5]);
+			expect(paths1).to.deep.equal(['collec.0', 'collec.1', 'collec.2', 'collec.3', 'collec.4', 'collec.5']);
+			expect(result2).to.deep.equal([1, 2, 3, 123, 4, 5]);
+			expect(indexes2).to.deep.equal([0, 1, 2, 3, 4, 5]);
+			expect(paths2).to.deep.equal(['collec.0', 'collec.1', 'collec.2', 'collec.3', 'collec.4', 'collec.5']);
+		});
+	});
+	describe("context and double context eacher : from leaf to root to leaf", function() {
+		var ctx = new y.Context({
+				collec: [1, 2, 3, 4, 5]
+			}),
+			eacher1 = new y.ContextEacher(ctx, 'collec'),
+			eacher2 = new y.ContextEacher(ctx, 'collec');
+		eacher1.getItem(2).reset('weeee');
+
+		var result1 = eacher1.children.map(function(i) {
+			return i.data;
+		});
+		var indexes1 = eacher1.children.map(function(i) {
+			return i.index;
+		});
+		var paths1 = eacher1.children.map(function(i) {
+			return i.path;
+		});
+		var result2 = eacher2.children.map(function(i) {
+			return i.data;
+		});
+		var indexes2 = eacher2.children.map(function(i) {
+			return i.index;
+		});
+		var paths2 = eacher2.children.map(function(i) {
+			return i.path;
+		});
+		it("should", function() {
+			expect(result1).to.deep.equal([1, 2, 'weeee', 4, 5]);
+			expect(indexes1).to.deep.equal([0, 1, 2, 3, 4]);
+			expect(paths1).to.deep.equal(['collec.0', 'collec.1', 'collec.2', 'collec.3', 'collec.4']);
+			expect(result2).to.deep.equal([1, 2, 'weeee', 4, 5]);
+			expect(indexes2).to.deep.equal([0, 1, 2, 3, 4]);
+			expect(paths2).to.deep.equal(['collec.0', 'collec.1', 'collec.2', 'collec.3', 'collec.4']);
+		});
+	});
+	describe("context, childContext, context eacher : from eacher to root to child", function() {
+		var ctx = new y.Context({
+				collec: [1, 2, 'youuuu', 4, 5]
+			}),
+			eacher = new y.ContextEacher(ctx, 'collec'),
+			childContext = new y.Context(null, ctx, 'collec');
+		childContext.dependent('1', ['2'], function(item2) {
+			if (item2)
+				return item2.toUpperCase();
+			return 'unset';
+		});
+		eacher.getItem(2).reset('weeee');
+
+		var result1 = eacher.children.map(function(i) {
+			return i.data;
+		});
+		var indexes1 = eacher.children.map(function(i) {
+			return i.index;
+		});
+		var paths1 = eacher.children.map(function(i) {
+			return i.path;
+		});
+
+		var childResult = childContext.get('1');
+
+		it("should", function() {
+			expect(result1).to.deep.equal([1, 'WEEEE', 'weeee', 4, 5]);
+			expect(indexes1).to.deep.equal([0, 1, 2, 3, 4]);
+			expect(paths1).to.deep.equal(['collec.0', 'collec.1', 'collec.2', 'collec.3', 'collec.4']);
+			expect(childResult).to.equals('WEEEE');
+		});
+	});
+	describe("context, childContext, context eacher : from child to child to root to eacher", function() {
+		var ctx = new y.Context({
+				collec: [1, 2, 'youuu', 4, 5]
+			}),
+			eacher = new y.ContextEacher(ctx, 'collec'),
+			childContext = new y.Context(null, ctx, 'collec');
+		childContext.dependent('1', ['2'], function(item2) {
+			if (item2)
+				return item2.toUpperCase();
+			return 'unset';
+		});
+
+		var eacherUpdateRes = null;
+		eacher.getItem(1).subscribe('$this', function(value, type, path, key) {
+			eacherUpdateRes = value + '__';
+		});
+
+		childContext.set('2', 'weeee');
+
+		var result1 = eacher.children.map(function(i) {
+			return i.data;
+		});
+		var indexes1 = eacher.children.map(function(i) {
+			return i.index;
+		});
+		var paths1 = eacher.children.map(function(i) {
+			return i.path;
+		});
+
+		var childResult = childContext.get('1');
+
+		it("should", function() {
+			expect(result1).to.deep.equal([1, 'WEEEE', 'weeee', 4, 5]);
+			expect(indexes1).to.deep.equal([0, 1, 2, 3, 4]);
+			expect(paths1).to.deep.equal(['collec.0', 'collec.1', 'collec.2', 'collec.3', 'collec.4']);
+			expect(childResult).to.equals('WEEEE');
+			expect(eacherUpdateRes).to.equals('WEEEE__');
+		});
+	});
+});
