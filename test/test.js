@@ -282,6 +282,25 @@ describe("context's binds", function() {
 	});
 
 
+	describe("root updward notification when child change", function() {
+		var res;
+		var context = new y.Context({
+			foo: { bar: 'yamvish' }
+		});
+
+		context.subscribe('$this', function(value, type, path, key) {
+			res = { value: value, type: type, path: path, key: key };
+		}, true);
+
+		context.set('foo', { bar: 'zoo' })
+
+		it("should", function() {
+			expect(res).to.deep.equal({ value: { bar: 'zoo' }, type: 'set', path: ['foo'], key: 'foo' });
+		});
+	});
+
+
+
 });
 
 describe("interpolable", function() {
