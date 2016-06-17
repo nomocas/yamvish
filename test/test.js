@@ -182,6 +182,22 @@ describe("context base", function() {
 			expect(res2).to.equals("flup-rully-flappy");
 		});
 	});
+	describe("dependent with interpolable", function() {
+		var context = new y.Context({
+				foo: 'bar-',
+				zoo: 'flup-',
+				title: 'reu'
+			})
+			.dependent('test', '{{ foo + zoo + title }}');
+
+		var interpolable = y.interpolable('{{ test }}');
+
+		var res = interpolable.output(context);
+
+		it("should", function() {
+			expect(res).to.equals("bar-flup-reu");
+		});
+	});
 });
 
 
