@@ -7,7 +7,6 @@ var y = function(t) {
 y.api = require('./lib/api');
 y.env = require('./lib/env');
 y.utils = require('./lib/utils');
-y.AsyncManager = require('./lib/async');
 
 var ctx = require('./lib/context');
 y.Context = ctx.Context;
