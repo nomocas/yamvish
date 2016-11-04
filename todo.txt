@@ -1,13 +1,12 @@
+	manage select and options more completly
+
+	add attr map management in .attr
+
+
 
 .set(path, func)
 
 ==> bind func to context
-
-
-
-y.toTemplate({ foo:function(){}, ... })
-y.toTemplate('foo', function(){})
-
 
 
 <api:app>
